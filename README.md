@@ -18,7 +18,7 @@ tar xvf UP000000625_83333_ECOLI.tar
 gunzip *.pdb.gz
 ls *.pdb > pdblist.dat
 cd ..
-bin/TMalign_mass.exe UP000000625_83333_ECOLI/AF-P38097-F1-model_v1.pdb -dir2 UP000000625_83333_ECOLI/ UP000000625_83333_ECOLI/pdblist.dat
+bin/TMalign_mass.exe UP000000625_83333_ECOLI/AF-P36677-F1-model_v1.pdb -dir2 UP000000625_83333_ECOLI/ UP000000625_83333_ECOLI/pdblist.dat
 ```
 
 ## References to cite:

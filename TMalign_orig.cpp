@@ -576,11 +576,7 @@ size_t get_PDB_lines(const string filename,
                 loop_=true;
                 _atom_site.clear();
                 atom_site_pos=0;
-                int rrshif = 11;
-                if (*line.rbegin() == '\r'){
-                    rrshif = 12;
-                }
-                _atom_site[line.substr(11,line.size()-rrshif)]=atom_site_pos;
+                _atom_site[line.substr(11,line.size()-12)]=atom_site_pos;
 
                 while(1)
                 {
@@ -588,7 +584,7 @@ size_t get_PDB_lines(const string filename,
                     else PrintErrorAndQuit("ERROR! Unexpected end of "+filename);
                     if (line.size()==0) continue;
                     if (line.compare(0,11,"_atom_site.")) break;
-                    _atom_site[line.substr(11,line.size()-rrshif)]=++atom_site_pos;
+                    _atom_site[line.substr(11,line.size()-12)]=++atom_site_pos;
                 }
 
 
@@ -1815,7 +1811,7 @@ double TMscore8_search(double **r1, double **r2, double **xtm, double **ytm,
     int i, m;
     double score_max, score, rmsd;    
     const int kmax=Lali;    
-    int k_ali[kmax], ka, k_ali2[kmax], ka2, k;
+    int k_ali[kmax], ka, k;
     double t[3];
     double u[3][3];
     double d;
@@ -1850,8 +1846,7 @@ double TMscore8_search(double **r1, double **r2, double **xtm, double **ytm,
     int i_ali[kmax], n_cut;
     int L_frag; //fragment length
     int iL_max; //maximum starting postion for the fragment
-	
-	ka = -1;
+    
     for(i_init=0; i_init<n_init; i_init++)
     {
         L_frag=L_ini[i_init];
@@ -1860,7 +1855,6 @@ double TMscore8_search(double **r1, double **r2, double **xtm, double **ytm,
         i=0;   
         while(1)
         {
-        	
             //extract the fragment starting from position i 
             ka=0;
             for(k=0; k<L_frag; k++)
@@ -1868,19 +1862,16 @@ double TMscore8_search(double **r1, double **r2, double **xtm, double **ytm,
                 int kk=k+i;
                 r1[k][0]=xtm[kk][0];  
                 r1[k][1]=xtm[kk][1]; 
-                r1[k][2]=xtm[kk][2];
+                r1[k][2]=xtm[kk][2];   
                 
                 r2[k][0]=ytm[kk][0];  
                 r2[k][1]=ytm[kk][1]; 
                 r2[k][2]=ytm[kk][2];
-
+                
                 k_ali[ka]=kk;
-            	k_ali2[k]=kk;
                 ka++;
             }
             
-        	ka2 = ka;
-        	
             //extract rotation matrix based on the fragment
             Kabsch(r1, r2, L_frag, 1, &rmsd, t, u);
             if (simplify_step != 1)
@@ -1909,10 +1900,6 @@ double TMscore8_search(double **r1, double **r2, double **xtm, double **ytm,
             d = local_d0_search + 1;
             for(int it=0; it<n_it; it++)            
             {
-            	
-	        	std::copy(k_ali, k_ali+ka,k_ali2);
-            	ka2 = ka;
-            	
                 ka=0;
                 for(k=0; k<n_cut; k++)
                 {
@@ -1955,20 +1942,7 @@ double TMscore8_search(double **r1, double **r2, double **xtm, double **ytm,
                         if(i_ali[k]!=k_ali[k]) break;
                     }
                     if(k==n_cut) break;
-                }
-            	
-            	if(n_cut==ka2)
-                {                
-                    for(k=0; k<ka2; k++)
-                    {
-                        if(i_ali[k]!=k_ali2[k]) break;
-                    }
-                	if(k==n_cut){
-                		break;
-                	}
-                }
-            	
-            	
+                }                                                               
             } //for iteration            
 
             if(i<iL_max)
@@ -3974,8 +3948,6 @@ int TMalign_main(double **xa, double **ya,
     /***********************/
     /* allocate memory     */
     /***********************/
-    ここから
-    これらの配列を外に出す
     int minlen = min(xlen, ylen);
     NewArray(&score, xlen+1, ylen+1);
     NewArray(&path, xlen+1, ylen+1);
@@ -5165,4 +5137,3 @@ int main(int argc, char *argv[])
     printf("Total CPU time is %5.2f seconds\n", diff);
     return 0;
 }
-
