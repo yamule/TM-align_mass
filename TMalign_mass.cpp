@@ -5047,31 +5047,6 @@ int main(int argc, char *argv[])
                 for (chain_j=0;chain_j<ychainnum;chain_j++)
                 {
                     ylen=PDB_lines2[chain_j].size();
-                    if(xlen > xlen_buff || ylen > ylen_buff){
-                        
-                        if(xlen_buff > 0){
-                            clean_up_after_approx_TM(invmap0, invmap, score, path, val,
-                                xtm, ytm, xt, r1, r2, xlen_buff, minlen_buff);
-                        }
-                        xlen_buff = xlen;
-                        ylen_buff = ylen;
-                        minlen_buff = min(xlen_buff,ylen_buff);
-                        invmap0         = new int[ylen_buff+1];
-                        invmap          = new int[ylen_buff+1];
-                        
-                        for(int ii=0; ii<ylen_buff; ii++) invmap0[ii]=-1;
-                        
-                        NewArray(&score, xlen_buff+1, ylen_buff+1);
-                        NewArray(&path, xlen_buff+1, ylen_buff+1);
-                        NewArray(&val, xlen_buff+1, ylen_buff+1);
-                        NewArray(&xtm, minlen_buff, 3);
-                        NewArray(&ytm, minlen_buff, 3);
-                        NewArray(&xt, xlen_buff, 3);
-                        NewArray(&r1, minlen_buff, 3);
-                        NewArray(&r2, minlen_buff, 3);
-                    }
-
-                    int minlen = min(xlen,ylen);
                     mol_vec2[chain_j]=-1;
                     if (!ylen)
                     {
@@ -5090,6 +5065,34 @@ int main(int argc, char *argv[])
                     ylen = read_PDB(PDB_lines2[chain_j], ya, seqy,
                         resi_vec2, byresi_opt?byresi_opt:o_opt);
                     make_sec(ya, ylen, secy);
+
+                    if(xlen > xlen_buff || ylen > ylen_buff){
+                        if(xlen_buff > 0){
+                            clean_up_after_approx_TM(invmap0, invmap, score, path, val,
+                                xtm, ytm, xt, r1, r2, xlen_buff, minlen_buff);
+                        }
+                        xlen_buff = xlen;
+                        ylen_buff = max(ylen,400);
+                        minlen_buff = min(xlen_buff,ylen_buff);
+                        invmap0         = new int[ylen_buff+1];
+                        invmap          = new int[ylen_buff+1];
+                        
+                        for(int ii=0; ii<ylen_buff; ii++) invmap0[ii]=-1;
+                        
+                        NewArray(&score, xlen_buff+1, ylen_buff+1);
+                        NewArray(&path, xlen_buff+1, ylen_buff+1);
+                        NewArray(&val, xlen_buff+1, ylen_buff+1);
+                        NewArray(&xtm, minlen_buff, 3);
+                        NewArray(&ytm, minlen_buff, 3);
+                        NewArray(&xt, xlen_buff, 3);
+                        NewArray(&r1, minlen_buff, 3);
+                        NewArray(&r2, minlen_buff, 3);
+                    }
+
+                    int minlen = min(xlen,ylen);
+
+
+
                     if (byresi_opt) extract_aln_from_resi(sequence,
                         seqx,seqy,resi_vec1,resi_vec2,byresi_opt);
 
