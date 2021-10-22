@@ -2246,8 +2246,9 @@ double get_score_fast( double **r1, double **r2, double **xtm, double **ytm,
             ytm[k][2]=y[j][2];                  
             
             k++;
+        }else if(i!=-1){
+            PrintErrorAndQuit("Wrong map!\n");
         }
-        else if(i!=-1) PrintErrorAndQuit("Wrong map!\n");
     }
     Kabsch(r1, r2, k, 1, &rms, t, u);
     
@@ -3954,37 +3955,31 @@ int TMalign_main(double **xa, double **ya,
     string &seqM, string &seqxA, string &seqyA,
     double &rmsd0, int &L_ali, double &Liden,
     double &TM_ali, double &rmsd_ali, int &n_ali, int &n_ali8,
-    const int xlen, const int ylen,
+    const int xlen, const int ylen, const int minlen,
     const vector<string> sequence, const double Lnorm_ass,
     const double d0_scale, const int i_opt, const int a_opt,
     const bool u_opt, const bool d_opt, const bool fast_opt,
-    const int mol_type, const double TMcut=-1)
+    const int mol_type, const double TMcut,
+    int *invmap0,
+    int *invmap,
+    double **score,       // Input score table for dynamic programming
+    bool   **path,        // for dynamic programming  
+    double **val,         // for dynamic programming  
+    double **xtm, 
+    double **ytm,  // for TMscore search engine
+    double **xt,          //for saving the superposed version of r_1 or xtm
+    double **r1,
+    double **r2    // for Kabsch rotation
+    )
 {
     double D0_MIN;        //for d0
     double Lnorm;         //normalization length
     double score_d8,d0,d0_search,dcu0;//for TMscore search
     double t[3], u[3][3]; //Kabsch translation vector and rotation matrix
-    double **score;       // Input score table for dynamic programming
-    bool   **path;        // for dynamic programming  
-    double **val;         // for dynamic programming  
-    double **xtm, **ytm;  // for TMscore search engine
-    double **xt;          //for saving the superposed version of r_1 or xtm
-    double **r1, **r2;    // for Kabsch rotation
 
     /***********************/
     /* allocate memory     */
     /***********************/
-    ここから
-    これらの配列を外に出す
-    int minlen = min(xlen, ylen);
-    NewArray(&score, xlen+1, ylen+1);
-    NewArray(&path, xlen+1, ylen+1);
-    NewArray(&val, xlen+1, ylen+1);
-    NewArray(&xtm, minlen, 3);
-    NewArray(&ytm, minlen, 3);
-    NewArray(&xt, xlen, 3);
-    NewArray(&r1, minlen, 3);
-    NewArray(&r2, minlen, 3);
 
     /***********************/
     /*    parameter set    */
@@ -3995,8 +3990,6 @@ int TMalign_main(double **xa, double **ya,
     int score_sum_method = 8;  //for scoring method, whether only sum over pairs with dis<score_d8
 
     int i;
-    int *invmap0         = new int[ylen+1];
-    int *invmap          = new int[ylen+1];
     double TM, TMmax=-1;
     for(i=0; i<ylen; i++) invmap0[i]=-1;
 
@@ -4083,8 +4076,6 @@ int TMalign_main(double **xa, double **ya,
             if (TMtmp<0.5*TMcut)
             {
                 TM1=TM2=TM3=TM4=TM5=TMtmp;
-                clean_up_after_approx_TM(invmap0, invmap, score, path, val,
-                    xtm, ytm, xt, r1, r2, xlen, minlen);
                 return 2;
             }
         }
@@ -4123,8 +4114,6 @@ int TMalign_main(double **xa, double **ya,
             if (TMtmp<0.52*TMcut)
             {
                 TM1=TM2=TM3=TM4=TM5=TMtmp;
-                clean_up_after_approx_TM(invmap0, invmap, score, path, val,
-                    xtm, ytm, xt, r1, r2, xlen, minlen);
                 return 3;
             }
         }
@@ -4169,8 +4158,6 @@ int TMalign_main(double **xa, double **ya,
             if (TMtmp<0.54*TMcut)
             {
                 TM1=TM2=TM3=TM4=TM5=TMtmp;
-                clean_up_after_approx_TM(invmap0, invmap, score, path, val,
-                    xtm, ytm, xt, r1, r2, xlen, minlen);
                 return 4;
             }
         }
@@ -4211,8 +4198,6 @@ int TMalign_main(double **xa, double **ya,
             if (TMtmp<0.56*TMcut)
             {
                 TM1=TM2=TM3=TM4=TM5=TMtmp;
-                clean_up_after_approx_TM(invmap0, invmap, score, path, val,
-                    xtm, ytm, xt, r1, r2, xlen, minlen);
                 return 5;
             }
         }
@@ -4253,8 +4238,6 @@ int TMalign_main(double **xa, double **ya,
             if (TMtmp<0.58*TMcut)
             {
                 TM1=TM2=TM3=TM4=TM5=TMtmp;
-                clean_up_after_approx_TM(invmap0, invmap, score, path, val,
-                    xtm, ytm, xt, r1, r2, xlen, minlen);
                 return 6;
             }
         }
@@ -4346,8 +4329,6 @@ int TMalign_main(double **xa, double **ya,
         if (TMtmp<0.6*TMcut)
         {
             TM1=TM2=TM3=TM4=TM5=TMtmp;
-            clean_up_after_approx_TM(invmap0, invmap, score, path, val,
-                xtm, ytm, xt, r1, r2, xlen, minlen);
             return 7;
         }
     }
@@ -4542,9 +4523,6 @@ int TMalign_main(double **xa, double **ya,
     seqyA=seqyA.substr(0,kk);
     seqM =seqM.substr(0,kk);
 
-    /* free memory */
-    clean_up_after_approx_TM(invmap0, invmap, score, path, val,
-        xtm, ytm, xt, r1, r2, xlen, minlen);
     delete [] m1;
     delete [] m2;
     return 0; // zero for no exception
@@ -4561,11 +4539,22 @@ int CPalign_main(double **xa, double **ya,
     string &seqM, string &seqxA, string &seqyA,
     double &rmsd0, int &L_ali, double &Liden,
     double &TM_ali, double &rmsd_ali, int &n_ali, int &n_ali8,
-    const int xlen, const int ylen,
+    const int xlen, const int ylen, const int minlen,
     const vector<string> sequence, const double Lnorm_ass,
     const double d0_scale, const int i_opt, const int a_opt,
     const bool u_opt, const bool d_opt, const bool fast_opt,
-    const int mol_type, const double TMcut=-1)
+    const int mol_type, const double TMcut,
+    int *invmap0,
+    int *invmap,
+    double **score,       // Input score table for dynamic programming
+    bool   **path,        // for dynamic programming  
+    double **val,         // for dynamic programming  
+    double **xtm, 
+    double **ytm,  // for TMscore search engine
+    double **xt,          //for saving the superposed version of r_1 or xtm
+    double **r1,
+    double **r2    // for Kabsch rotation
+    )
 {
     char   *seqx_cp, *seqy_cp; // for the protein sequence 
     char   *secx_cp, *secy_cp; // for the secondary structure 
@@ -4597,8 +4586,9 @@ int CPalign_main(double **xa, double **ya,
         t0, u0, TM1_cp, TM2_cp, TM3, TM4, TM5,
         d0_0, TM_0, d0A, d0B, d0u, d0a, d0_out, seqM, seqxA_cp, seqyA_cp,
         rmsd0, L_ali, Liden, TM_ali, rmsd_ali, n_ali, n_ali8,
-        xlen*2, ylen, sequence, Lnorm_ass, d0_scale,
-        0, false, false, false, true, mol_type, -1);
+        xlen*2, ylen, minlen, sequence, Lnorm_ass, d0_scale,
+        0, false, false, false, true, mol_type, -1
+        ,invmap0,invmap,score,path,val,xtm,ytm,xt,r1,r2);
 
     /* delete gap in seqxA_cp */
     r=0;
@@ -4642,8 +4632,9 @@ int CPalign_main(double **xa, double **ya,
         t0, u0, TM1, TM2, TM3, TM4, TM5,
         d0_0, TM_0, d0A, d0B, d0u, d0a, d0_out, seqM, seqxA, seqyA,
         rmsd0, L_ali, Liden, TM_ali, rmsd_ali, n_ali, n_ali8,
-        xlen, ylen, sequence, Lnorm_ass, d0_scale,
-        0, false, false, false, true, mol_type, -1);
+        xlen, ylen, minlen, sequence, Lnorm_ass, d0_scale,
+        0, false, false, false, true, mol_type, -1
+        ,invmap0,invmap,score,path,val,xtm,ytm,xt,r1,r2);
 
     /* do not use cricular permutation of number of aligned residues is not
      * larger than sequence-order dependent alignment */
@@ -4673,8 +4664,9 @@ int CPalign_main(double **xa, double **ya,
         t0, u0, TM1, TM2, TM3, TM4, TM5,
         d0_0, TM_0, d0A, d0B, d0u, d0a, d0_out, seqM, seqxA_cp, seqyA_cp,
         rmsd0, L_ali, Liden, TM_ali, rmsd_ali, n_ali, n_ali8,
-        xlen, ylen, sequence, Lnorm_ass, d0_scale,
-        i_opt, a_opt, u_opt, d_opt, fast_opt, mol_type, TMcut);
+        xlen, ylen, minlen, sequence, Lnorm_ass, d0_scale,
+        i_opt, a_opt, u_opt, d_opt, fast_opt, mol_type, TMcut
+        ,invmap0,invmap,score,path,val,xtm,ytm,xt,r1,r2);
 
     /* correct alignment
      * r - residue index in the original unaligned sequence 
@@ -4975,6 +4967,7 @@ int main(int argc, char *argv[])
     int    i,j;                // file index
     int    chain_i,chain_j;    // chain index
     int    r;                  // residue index
+    int    xlen_buff=-1, ylen_buff=-1;         // chain length
     int    xlen, ylen;         // chain length
     int    xchainnum,ychainnum;// number of chains in a PDB file
     char   *seqx, *seqy;       // for the protein sequence 
@@ -4986,6 +4979,19 @@ int main(int argc, char *argv[])
     vector<string> resi_vec1;  // residue index for chain1
     vector<string> resi_vec2;  // residue index for chain2
 
+
+    double **score;       // Input score table for dynamic programming
+    bool   **path;        // for dynamic programming  
+    double **val;         // for dynamic programming  
+    double **xtm, **ytm;  // for TMscore search engine
+    double **xt;          //for saving the superposed version of r_1 or xtm
+    double **r1, **r2;    // for Kabsch rotation
+
+    int minlen_buff = min(xlen_buff, ylen_buff);
+    int *invmap0;
+    int *invmap;
+
+    
     /* loop over file names */
     for (i=0;i<chain1_list.size();i++)
     {
@@ -5041,6 +5047,31 @@ int main(int argc, char *argv[])
                 for (chain_j=0;chain_j<ychainnum;chain_j++)
                 {
                     ylen=PDB_lines2[chain_j].size();
+                    if(xlen > xlen_buff || ylen > ylen_buff){
+                        
+                        if(xlen_buff > 0){
+                            clean_up_after_approx_TM(invmap0, invmap, score, path, val,
+                                xtm, ytm, xt, r1, r2, xlen_buff, minlen_buff);
+                        }
+                        xlen_buff = xlen;
+                        ylen_buff = ylen;
+                        minlen_buff = min(xlen_buff,ylen_buff);
+                        invmap0         = new int[ylen_buff+1];
+                        invmap          = new int[ylen_buff+1];
+                        
+                        for(int ii=0; ii<ylen_buff; ii++) invmap0[ii]=-1;
+                        
+                        NewArray(&score, xlen_buff+1, ylen_buff+1);
+                        NewArray(&path, xlen_buff+1, ylen_buff+1);
+                        NewArray(&val, xlen_buff+1, ylen_buff+1);
+                        NewArray(&xtm, minlen_buff, 3);
+                        NewArray(&ytm, minlen_buff, 3);
+                        NewArray(&xt, xlen_buff, 3);
+                        NewArray(&r1, minlen_buff, 3);
+                        NewArray(&r2, minlen_buff, 3);
+                    }
+
+                    int minlen = min(xlen,ylen);
                     mol_vec2[chain_j]=-1;
                     if (!ylen)
                     {
@@ -5084,18 +5115,25 @@ int main(int argc, char *argv[])
                         d0_0, TM_0, d0A, d0B, d0u, d0a, d0_out,
                         seqM, seqxA, seqyA,
                         rmsd0, L_ali, Liden, TM_ali, rmsd_ali, n_ali, n_ali8,
-                        xlen, ylen, sequence, Lnorm_ass, d0_scale,
+                        xlen, ylen, minlen, sequence, Lnorm_ass, d0_scale,
                         i_opt, a_opt, u_opt, d_opt, fast_opt,
-                        mol_vec1[chain_i]+mol_vec2[chain_j],TMcut);
+                        mol_vec1[chain_i]+mol_vec2[chain_j]
+                        ,TMcut
+                        ,invmap0,invmap,score,path,val,xtm,ytm,xt,r1,r2
+                        
+                        );
                     else TMalign_main(
                         xa, ya, seqx, seqy, secx, secy,
                         t0, u0, TM1, TM2, TM3, TM4, TM5,
                         d0_0, TM_0, d0A, d0B, d0u, d0a, d0_out,
                         seqM, seqxA, seqyA,
                         rmsd0, L_ali, Liden, TM_ali, rmsd_ali, n_ali, n_ali8,
-                        xlen, ylen, sequence, Lnorm_ass, d0_scale,
+                        xlen, ylen, minlen, sequence, Lnorm_ass, d0_scale,
                         i_opt, a_opt, u_opt, d_opt, fast_opt,
-                        mol_vec1[chain_i]+mol_vec2[chain_j],TMcut);
+                        mol_vec1[chain_i]+mol_vec2[chain_j]
+                        ,TMcut
+                        ,invmap0,invmap,score,path,val,xtm,ytm,xt,r1,r2
+                        );
 
                     /* print result */
                     if (outfmt_opt==0) print_version();
@@ -5162,6 +5200,11 @@ int main(int argc, char *argv[])
 
     t2 = clock();
     float diff = ((float)t2 - (float)t1)/CLOCKS_PER_SEC;
+    
+    if(xlen_buff > 0){
+        clean_up_after_approx_TM(invmap0, invmap, score, path, val,
+            xtm, ytm, xt, r1, r2, xlen_buff, minlen_buff);
+    }
     printf("Total CPU time is %5.2f seconds\n", diff);
     return 0;
 }
