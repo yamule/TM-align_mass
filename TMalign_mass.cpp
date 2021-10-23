@@ -266,6 +266,11 @@ template <class A> void DeleteArray(A *** array, int Narray)
     (*array)=NULL;
 }
 
+struct DPCell{
+    double val;
+    bool path;
+};
+
 string AAmap(char A)
 {
     if (A=='A') return "ALA";
@@ -862,7 +867,7 @@ int read_PDB(const vector<string> &PDB_lines, double **a, char *seq,
     return i;
 }
 
-double dist(double x[3], double y[3])
+inline double dist(double x[3], double y[3])
 {
     double d1=x[0]-y[0];
     double d2=x[1]-y[1];
@@ -871,19 +876,19 @@ double dist(double x[3], double y[3])
     return (d1*d1 + d2*d2 + d3*d3);
 }
 
-double dot(double *a, double *b)
+inline double dot(double *a, double *b)
 {
     return (a[0] * b[0] + a[1] * b[1] + a[2] * b[2]);
 }
 
-void transform(double t[3], double u[3][3], double *x, double *x1)
+inline void transform(double t[3], double u[3][3], double *x, double *x1)
 {
     x1[0]=t[0]+dot(&u[0][0], x);
     x1[1]=t[1]+dot(&u[1][0], x);
     x1[2]=t[2]+dot(&u[2][0], x);
 }
 
-void do_rotation(double **x, double **x1, int len, double t[3], double u[3][3])
+inline void do_rotation(double **x, double **x1, int len, double t[3], double u[3][3])
 {
     for(int i=0; i<len; i++)
     {
@@ -1321,7 +1326,7 @@ bool Kabsch(double **x, double **y, int n, int mode, double *rms,
 /* Input: score[1:len1, 1:len2], and gap_open
  * Output: j2i[1:len2] \in {1:len1} U {-1}
  * path[0:len1, 0:len2]=1,2,3, from diagonal, horizontal, vertical */
-void NWDP_TM_A(double **score, bool **path, double **val,
+void NWDP_TM_A(double **score, DPCell **dpcell,
     int len1, int len2, double gap_open, int j2i[])
 {
 
@@ -1331,16 +1336,14 @@ void NWDP_TM_A(double **score, bool **path, double **val,
     //initialization
     for(i=0; i<=len1; i++)
     {
-        val[i][0]=0;
-        //val[i][0]=i*gap_open;
-        path[i][0]=false; //not from diagonal
+        dpcell[i][0].val=0;
+        dpcell[i][0].path=false; //not from diagonal
     }
 
     for(j=0; j<=len2; j++)
     {
-        val[0][j]=0;
-        //val[0][j]=j*gap_open;
-        path[0][j]=false; //not from diagonal
+        dpcell[0][j].val=0;
+        dpcell[0][j].path=false; //not from diagonal
         j2i[j]=-1;    //all are not aligned, only use j2i[1:len2]
     }      
 
@@ -1350,27 +1353,27 @@ void NWDP_TM_A(double **score, bool **path, double **val,
     {
         for(j=1; j<=len2; j++)
         {
-            d=val[i-1][j-1]+score[i][j]; //diagonal
+            d=dpcell[i-1][j-1].val+score[i][j]; //diagonal
 
             //symbol insertion in horizontal (= a gap in vertical)
-            h=val[i-1][j];
-            if(path[i-1][j]) h += gap_open; //aligned in last position
+            h=dpcell[i-1][j].val;
+            if(dpcell[i-1][j].path) h += gap_open; //aligned in last position
 
             //symbol insertion in vertical
-            v=val[i][j-1];
-            if(path[i][j-1]) v += gap_open; //aligned in last position
+            v=dpcell[i][j-1].val;
+            if(dpcell[i][j-1].path) v += gap_open; //aligned in last position
 
 
             if(d>=h && d>=v)
             {
-                path[i][j]=true; //from diagonal
-                val[i][j]=d;
+                dpcell[i][j].path=true; //from diagonal
+                dpcell[i][j].val=d;
             }
             else 
             {
-                path[i][j]=false; //from horizontal
-                if(v>=h) val[i][j]=v;
-                else val[i][j]=h;
+                dpcell[i][j].path=false; //from horizontal
+                if(v>=h) dpcell[i][j].val=v;
+                else dpcell[i][j].val=h;
             }
         } //for i
     } //for j
@@ -1380,7 +1383,7 @@ void NWDP_TM_A(double **score, bool **path, double **val,
     j=len2;
     while(i>0 && j>0)
     {
-        if(path[i][j]) //from diagonal
+        if(dpcell[i][j].path) //from diagonal
         {
             j2i[j-1]=i-1;
             i--;
@@ -1388,11 +1391,11 @@ void NWDP_TM_A(double **score, bool **path, double **val,
         }
         else 
         {
-            h=val[i-1][j];
-            if(path[i-1][j]) h +=gap_open;
+            h=dpcell[i-1][j].val;
+            if(dpcell[i-1][j].path) h +=gap_open;
 
-            v=val[i][j-1];
-            if(path[i][j-1]) v +=gap_open;
+            v=dpcell[i][j-1].val;
+            if(dpcell[i][j-1].path) v +=gap_open;
 
             if(v>=h) j--;
             else i--;
@@ -1403,27 +1406,27 @@ void NWDP_TM_A(double **score, bool **path, double **val,
 /* Input: vectors x, y, rotation matrix t, u, scale factor d02, and gap_open
  * Output: j2i[1:len2] \in {1:len1} U {-1}
  * path[0:len1, 0:len2]=1,2,3, from diagonal, horizontal, vertical */
-void NWDP_TM(bool **path, double **val, double **x, double **y,
+void NWDP_TM_B(DPCell **dpcell, double **x, double **y,
     int len1, int len2, double t[3], double u[3][3],
     double d02, double gap_open, int j2i[])
 {
     int i, j;
     double h, v, d;
 
-    //initialization. use old val[i][0] and val[0][j] initialization
+    //initialization. use old dpcell[i][0].val and dpcell[0][j].val initialization
     //to minimize difference from TMalign fortran version
     for(i=0; i<=len1; i++)
     {
-        val[i][0]=0;
-        //val[i][0]=i*gap_open;
-        path[i][0]=false; //not from diagonal
+        dpcell[i][0].val=0;
+        //dpcell[i][0].val=i*gap_open;
+        dpcell[i][0].path=0.0; //not from diagonal
     }
 
     for(j=0; j<=len2; j++)
     {
-        val[0][j]=0;
-        //val[0][j]=j*gap_open;
-        path[0][j]=false; //not from diagonal
+        dpcell[0][j].val=0;
+        //dpcell[0][j].val=j*gap_open;
+        dpcell[0][j].path=0.0; //not from diagonal
         j2i[j]=-1;    //all are not aligned, only use j2i[1:len2]
     }      
     double xx[3], dij;
@@ -1436,27 +1439,26 @@ void NWDP_TM(bool **path, double **val, double **x, double **y,
         for(j=1; j<=len2; j++)
         {
             dij=dist(xx, &y[j-1][0]);    
-            d=val[i-1][j-1] +  1.0/(1+dij/d02);
+            d=dpcell[i-1][j-1].val +  1.0/(1+dij/d02);
 
             //symbol insertion in horizontal (= a gap in vertical)
-            h=val[i-1][j];
-            if(path[i-1][j]) h += gap_open; //aligned in last position
+            h=dpcell[i-1][j].val;
+            if(dpcell[i-1][j].path) h += gap_open; //aligned in last position
 
             //symbol insertion in vertical
-            v=val[i][j-1];
-            if(path[i][j-1]) v += gap_open; //aligned in last position
-
+            v=dpcell[i][j-1].val;
+            if(dpcell[i][j-1].path) v += gap_open; //aligned in last position
 
             if(d>=h && d>=v)
             {
-                path[i][j]=true; //from diagonal
-                val[i][j]=d;
+                dpcell[i][j].path=1.0; //from diagonal
+                dpcell[i][j].val=d;
             }
             else 
             {
-                path[i][j]=false; //from horizontal
-                if(v>=h) val[i][j]=v;
-                else val[i][j]=h;
+                dpcell[i][j].path=0.0; //from horizontal
+                if(v>=h) dpcell[i][j].val=v;
+                else dpcell[i][j].val=h;
             }
         } //for i
     } //for j
@@ -1466,7 +1468,7 @@ void NWDP_TM(bool **path, double **val, double **x, double **y,
     j=len2;
     while(i>0 && j>0)
     {
-        if(path[i][j]) //from diagonal
+        if(dpcell[i][j].path) //from diagonal
         {
             j2i[j-1]=i-1;
             i--;
@@ -1474,11 +1476,11 @@ void NWDP_TM(bool **path, double **val, double **x, double **y,
         }
         else 
         {
-            h=val[i-1][j];
-            if(path[i-1][j]) h +=gap_open;
+            h=dpcell[i-1][j].val;
+            if(dpcell[i-1][j].path) h +=gap_open;
 
-            v=val[i][j-1];
-            if(path[i][j-1]) v +=gap_open;
+            v=dpcell[i][j-1].val;
+            if(dpcell[i][j-1].path) v +=gap_open;
 
             if(v>=h) j--;
             else i--;
@@ -1490,7 +1492,7 @@ void NWDP_TM(bool **path, double **val, double **x, double **y,
  * Input: vectors x, y, scale factor d02, and gap_open
  * Output: j2i[1:len2] \in {1:len1} U {-1}
  * path[0:len1, 0:len2]=1,2,3, from diagonal, horizontal, vertical */
-void NWDP_SE(bool **path, double **val, double **x, double **y,
+void NWDP_SE(DPCell **dpcell, double **x, double **y,
     int len1, int len2, double d02, double gap_open, int j2i[])
 {
     int i, j;
@@ -1498,14 +1500,14 @@ void NWDP_SE(bool **path, double **val, double **x, double **y,
 
     for(i=0; i<=len1; i++)
     {
-        val[i][0]=0;
-        path[i][0]=false; //not from diagonal
+        dpcell[i][0].val=0;
+        dpcell[i][0].path=false; //not from diagonal
     }
 
     for(j=0; j<=len2; j++)
     {
-        val[0][j]=0;
-        path[0][j]=false; //not from diagonal
+        dpcell[0][j].val=0;
+        dpcell[0][j].path=false; //not from diagonal
         j2i[j]=-1;    //all are not aligned, only use j2i[1:len2]
     }      
     double dij;
@@ -1516,27 +1518,27 @@ void NWDP_SE(bool **path, double **val, double **x, double **y,
         for(j=1; j<=len2; j++)
         {
             dij=dist(&x[i-1][0], &y[j-1][0]);    
-            d=val[i-1][j-1] +  1.0/(1+dij/d02);
+            d=dpcell[i-1][j-1].val +  1.0/(1+dij/d02);
 
             //symbol insertion in horizontal (= a gap in vertical)
-            h=val[i-1][j];
-            if(path[i-1][j]) h += gap_open; //aligned in last position
+            h=dpcell[i-1][j].val;
+            if(dpcell[i-1][j].path) h += gap_open; //aligned in last position
 
             //symbol insertion in vertical
-            v=val[i][j-1];
-            if(path[i][j-1]) v += gap_open; //aligned in last position
+            v=dpcell[i][j-1].val;
+            if(dpcell[i][j-1].path) v += gap_open; //aligned in last position
 
 
             if(d>=h && d>=v)
             {
-                path[i][j]=true; //from diagonal
-                val[i][j]=d;
+                dpcell[i][j].path=true; //from diagonal
+                dpcell[i][j].val=d;
             }
             else 
             {
-                path[i][j]=false; //from horizontal
-                if(v>=h) val[i][j]=v;
-                else val[i][j]=h;
+                dpcell[i][j].path=false; //from horizontal
+                if(v>=h) dpcell[i][j].val=v;
+                else dpcell[i][j].val=h;
             }
         } //for i
     } //for j
@@ -1546,7 +1548,7 @@ void NWDP_SE(bool **path, double **val, double **x, double **y,
     j=len2;
     while(i>0 && j>0)
     {
-        if(path[i][j]) //from diagonal
+        if(dpcell[i][j].path) //from diagonal
         {
             j2i[j-1]=i-1;
             i--;
@@ -1554,11 +1556,11 @@ void NWDP_SE(bool **path, double **val, double **x, double **y,
         }
         else 
         {
-            h=val[i-1][j];
-            if(path[i-1][j]) h +=gap_open;
+            h=dpcell[i-1][j].val;
+            if(dpcell[i-1][j].path) h +=gap_open;
 
-            v=val[i][j-1];
-            if(path[i][j-1]) v +=gap_open;
+            v=dpcell[i][j-1].val;
+            if(dpcell[i][j-1].path) v +=gap_open;
 
             if(v>=h) j--;
             else i--;
@@ -1570,7 +1572,7 @@ void NWDP_SE(bool **path, double **val, double **x, double **y,
  * Input: secondary structure secx, secy, and gap_open
  * Output: j2i[1:len2] \in {1:len1} U {-1}
  * path[0:len1, 0:len2]=1,2,3, from diagonal, horizontal, vertical */
-void NWDP_TM(bool **path, double **val, const char *secx, const char *secy,
+void NWDP_TM_C(DPCell **dpcell, const char *secx, const char *secy,
     const int len1, const int len2, const double gap_open, int j2i[])
 {
 
@@ -1580,16 +1582,16 @@ void NWDP_TM(bool **path, double **val, const char *secx, const char *secy,
     //initialization
     for(i=0; i<=len1; i++)
     {
-        val[i][0]=0;
-        //val[i][0]=i*gap_open;
-        path[i][0]=false; //not from diagonal
+        dpcell[i][0].val=0;
+        //dpcell[i][0].val=i*gap_open;
+        dpcell[i][0].path=false; //not from diagonal
     }
 
     for(j=0; j<=len2; j++)
     {
-        val[0][j]=0;
-        //val[0][j]=j*gap_open;
-        path[0][j]=false; //not from diagonal
+        dpcell[0][j].val=0;
+        //dpcell[0][j].val=j*gap_open;
+        dpcell[0][j].path=false; //not from diagonal
         j2i[j]=-1;    //all are not aligned, only use j2i[1:len2]
     }      
 
@@ -1598,26 +1600,27 @@ void NWDP_TM(bool **path, double **val, const char *secx, const char *secy,
     {
         for(j=1; j<=len2; j++)
         {
-            d=val[i-1][j-1] + 1.0*(secx[i-1]==secy[j-1]);
+            d=dpcell[i-1][j-1].val + 1.0*(secx[i-1]==secy[j-1]);
+
 
             //symbol insertion in horizontal (= a gap in vertical)
-            h=val[i-1][j];
-            if(path[i-1][j]) h += gap_open; //aligned in last position
+            h=dpcell[i-1][j].val;
+            if(dpcell[i-1][j].path) h += gap_open; //aligned in last position
 
             //symbol insertion in vertical
-            v=val[i][j-1];
-            if(path[i][j-1]) v += gap_open; //aligned in last position
+            v=dpcell[i][j-1].val;
+            if(dpcell[i][j-1].path) v += gap_open; //aligned in last position
 
             if(d>=h && d>=v)
             {
-                path[i][j]=true; //from diagonal
-                val[i][j]=d;
+                dpcell[i][j].path=true; //from diagonal
+                dpcell[i][j].val=d;
             }
             else 
             {
-                path[i][j]=false; //from horizontal
-                if(v>=h) val[i][j]=v;
-                else val[i][j]=h;
+                dpcell[i][j].path=false; //from horizontal
+                if(v>=h) dpcell[i][j].val=v;
+                else dpcell[i][j].val=h;
             }
         } //for i
     } //for j
@@ -1627,7 +1630,7 @@ void NWDP_TM(bool **path, double **val, const char *secx, const char *secy,
     j=len2;
     while(i>0 && j>0)
     {
-        if(path[i][j]) //from diagonal
+        if(dpcell[i][j].path) //from diagonal
         {
             j2i[j-1]=i-1;
             i--;
@@ -1635,11 +1638,11 @@ void NWDP_TM(bool **path, double **val, const char *secx, const char *secy,
         }
         else 
         {
-            h=val[i-1][j];
-            if(path[i-1][j]) h +=gap_open;
+            h=dpcell[i-1][j].val;
+            if(dpcell[i-1][j].path) h +=gap_open;
 
-            v=val[i][j-1];
-            if(path[i][j-1]) v +=gap_open;
+            v=dpcell[i][j-1].val;
+            if(dpcell[i][j-1].path) v +=gap_open;
 
             if(v>=h) j--;
             else i--;
@@ -2510,11 +2513,11 @@ void make_sec(double **x, int len, char *sec)
 //y2x[j]=i means:
 //the jth element in y is aligned to the ith element in x if i>=0 
 //the jth element in y is aligned to a gap in x if i==-1
-void get_initial_ss(bool **path, double **val,
+void get_initial_ss(DPCell **dpcell,
     const char *secx, const char *secy, int xlen, int ylen, int *y2x)
 {
     double gap_open=-1.0;
-    NWDP_TM(path, val, secx, secy, xlen, ylen, gap_open, y2x);
+    NWDP_TM_C(dpcell, secx, secy, xlen, ylen, gap_open, y2x);
 }
 
 
@@ -2526,7 +2529,7 @@ void get_initial_ss(bool **path, double **val,
 //the jth element in y is aligned to the ith element in x if i>=0 
 //the jth element in y is aligned to a gap in x if i==-1
 bool get_initial5( double **r1, double **r2, double **xtm, double **ytm,
-    bool **path, double **val,
+    DPCell **dpcell,
     double **x, double **y, int xlen, int ylen, int *y2x,
     double d0, double d0_search, const bool fast_opt, const double D0_MIN)
 {
@@ -2606,7 +2609,7 @@ bool get_initial5( double **r1, double **r2, double **xtm, double **ytm,
                 Kabsch(r1, r2, n_frag[i_frag], 1, &rmsd, t, u);
 
                 double gap_open = 0.0;
-                NWDP_TM(path, val, x, y, xlen, ylen,
+                NWDP_TM_B(dpcell, x, y, xlen, ylen,
                     t, u, d02, gap_open, invmap);
                 GL = get_score_fast(r1, r2, xtm, ytm, x, y, xlen, ylen,
                     invmap, d0, d0_search, t, u);
@@ -2676,8 +2679,7 @@ void score_matrix_rmsd_sec( double **r1, double **r2, double **score,
 //y2x[j]=i means:
 //the jth element in y is aligned to the ith element in x if i>=0 
 //the jth element in y is aligned to a gap in x if i==-1
-void get_initial_ssplus(double **r1, double **r2, double **score, bool **path,
-    double **val, const char *secx, const char *secy, double **x, double **y,
+void get_initial_ssplus(double **r1, double **r2, double **score, DPCell **dpcell, const char *secx, const char *secy, double **x, double **y,
     int xlen, int ylen, int *y2x0, int *y2x, const double D0_MIN, double d0)
 {
     //create score matrix for DP
@@ -2685,7 +2687,7 @@ void get_initial_ssplus(double **r1, double **r2, double **score, bool **path,
         y2x0, D0_MIN,d0);
     
     double gap_open=-1.0;
-    NWDP_TM_A(score, path, val, xlen, ylen, gap_open, y2x);
+    NWDP_TM_A(score,dpcell, xlen, ylen, gap_open, y2x);
 }
 
 
@@ -2991,7 +2993,7 @@ double get_initial_fgt(double **r1, double **r2, double **xtm, double **ytm,
 //       vectors x and y, d0
 //output: best alignment that maximizes the TMscore, will be stored in invmap
 double DP_iter(double **r1, double **r2, double **xtm, double **ytm,
-    double **xt, bool **path, double **val, double **x, double **y,
+    double **xt, DPCell **dpcell, double **x, double **y,
     int xlen, int ylen, double t[3], double u[3][3], int invmap0[],
     int g1, int g2, int iteration_max, double local_d0_search,
     double D0_MIN, double Lnorm, double d0, double score_d8)
@@ -3011,7 +3013,7 @@ double DP_iter(double **r1, double **r2, double **xtm, double **ytm,
     {
         for(iteration=0; iteration<iteration_max; iteration++)
         {           
-            NWDP_TM(path, val, x, y, xlen, ylen,
+            NWDP_TM_B(dpcell, x, y, xlen, ylen,
                 t, u, d02, gap_open[g], invmap);
             
             k=0;
@@ -3913,15 +3915,14 @@ double approx_TM(const int xlen, const int ylen, const int a_opt,
     return TMtmp;
 }
 
-void clean_up_after_approx_TM(int *invmap0, int *invmap,
-    double **score, bool **path, double **val, double **xtm, double **ytm,
+void clean_up_after_approx_TM(int *invmap0, int *invmap,double **score,
+    DPCell **dpcell, double **xtm, double **ytm,
     double **xt, double **r1, double **r2, const int xlen, const int minlen)
 {
     delete [] invmap0;
     delete [] invmap;
     DeleteArray(&score, xlen+1);
-    DeleteArray(&path, xlen+1);
-    DeleteArray(&val, xlen+1);
+    DeleteArray(&dpcell, xlen+1);
     DeleteArray(&xtm, minlen);
     DeleteArray(&ytm, minlen);
     DeleteArray(&xt, xlen);
@@ -3953,21 +3954,19 @@ int TMalign_main(double **xa, double **ya,
     double Lnorm;         //normalization length
     double score_d8,d0,d0_search,dcu0;//for TMscore search
     double t[3], u[3][3]; //Kabsch translation vector and rotation matrix
-    double **score;       // Input score table for dynamic programming
-    bool   **path;        // for dynamic programming  
-    double **val;         // for dynamic programming  
     double **xtm, **ytm;  // for TMscore search engine
     double **xt;          //for saving the superposed version of r_1 or xtm
     double **r1, **r2;    // for Kabsch rotation
-
+    double **score;
+    DPCell **dpcell;
+    
     /***********************/
     /* allocate memory     */
     /***********************/
     
     int minlen = min(xlen, ylen);
     NewArray(&score, xlen+1, ylen+1);
-    NewArray(&path, xlen+1, ylen+1);
-    NewArray(&val, xlen+1, ylen+1);
+    NewArray(&dpcell, xlen+1, ylen+1);
     NewArray(&xtm, minlen, 3);
     NewArray(&ytm, minlen, 3);
     NewArray(&xt, xlen, 3);
@@ -4053,7 +4052,7 @@ int TMalign_main(double **xa, double **ya,
         if (TM>TMmax) TMmax = TM;
         if (TMcut>0) copy_t_u(t, u, t0, u0);
         //run dynamic programing iteratively to find the best alignment
-        TM = DP_iter(r1, r2, xtm, ytm, xt, path, val, xa, ya, xlen, ylen,
+        TM = DP_iter(r1, r2, xtm, ytm, xt, dpcell, xa, ya, xlen, ylen,
              t, u, invmap, 0, 2, (fast_opt)?2:30, local_d0_search,
              D0_MIN, Lnorm, d0, score_d8);
         if (TM>TMmax)
@@ -4071,7 +4070,7 @@ int TMalign_main(double **xa, double **ya,
             if (TMtmp<0.5*TMcut)
             {
                 TM1=TM2=TM3=TM4=TM5=TMtmp;
-                clean_up_after_approx_TM(invmap0, invmap, score, path, val,
+                clean_up_after_approx_TM(invmap0, invmap, score, dpcell,
                     xtm, ytm, xt, r1, r2, xlen, minlen);
                 return 2;
             }
@@ -4080,7 +4079,7 @@ int TMalign_main(double **xa, double **ya,
         /************************************************************/
         /*    get initial alignment based on secondary structure    */
         /************************************************************/
-        get_initial_ss(path, val, secx, secy, xlen, ylen, invmap);
+        get_initial_ss(dpcell, secx, secy, xlen, ylen, invmap);
         TM = detailed_search(r1, r2, xtm, ytm, xt, xa, ya, xlen, ylen, invmap,
             t, u, simplify_step, score_sum_method, local_d0_search, Lnorm,
             score_d8, d0);
@@ -4092,7 +4091,7 @@ int TMalign_main(double **xa, double **ya,
         }
         if (TM > TMmax*0.2)
         {
-            TM = DP_iter(r1, r2, xtm, ytm, xt, path, val, xa, ya,
+            TM = DP_iter(r1, r2, xtm, ytm, xt, dpcell, xa, ya,
                 xlen, ylen, t, u, invmap, 0, 2, (fast_opt)?2:30,
                 local_d0_search, D0_MIN, Lnorm, d0, score_d8);
             if (TM>TMmax)
@@ -4111,7 +4110,7 @@ int TMalign_main(double **xa, double **ya,
             if (TMtmp<0.52*TMcut)
             {
                 TM1=TM2=TM3=TM4=TM5=TMtmp;
-                clean_up_after_approx_TM(invmap0, invmap, score, path, val,
+                clean_up_after_approx_TM(invmap0, invmap, score, dpcell,
                     xtm, ytm, xt, r1, r2, xlen, minlen);
                 return 3;
             }
@@ -4121,7 +4120,7 @@ int TMalign_main(double **xa, double **ya,
         /*    get initial alignment based on local superposition    */
         /************************************************************/
         //=initial5 in original TM-align
-        if (get_initial5( r1, r2, xtm, ytm, path, val, xa, ya,
+        if (get_initial5( r1, r2, xtm, ytm, dpcell, xa, ya,
             xlen, ylen, invmap, d0, d0_search, fast_opt, D0_MIN))
         {
             TM = detailed_search(r1, r2, xtm, ytm, xt, xa, ya, xlen, ylen,
@@ -4135,7 +4134,7 @@ int TMalign_main(double **xa, double **ya,
             }
             if (TM > TMmax*ddcc)
             {
-                TM = DP_iter(r1, r2, xtm, ytm, xt, path, val, xa, ya,
+                TM = DP_iter(r1, r2, xtm, ytm, xt, dpcell, xa, ya,
                     xlen, ylen, t, u, invmap, 0, 2, 2, local_d0_search,
                     D0_MIN, Lnorm, d0, score_d8);
                 if (TM>TMmax)
@@ -4157,7 +4156,7 @@ int TMalign_main(double **xa, double **ya,
             if (TMtmp<0.54*TMcut)
             {
                 TM1=TM2=TM3=TM4=TM5=TMtmp;
-                clean_up_after_approx_TM(invmap0, invmap, score, path, val,
+                clean_up_after_approx_TM(invmap0, invmap, score, dpcell,
                     xtm, ytm, xt, r1, r2, xlen, minlen);
                 return 4;
             }
@@ -4167,7 +4166,7 @@ int TMalign_main(double **xa, double **ya,
         /* get initial alignment by local superposition+secondary structure */
         /********************************************************************/
         //=initial3 in original TM-align
-        get_initial_ssplus(r1, r2, score, path, val, secx, secy, xa, ya,
+        get_initial_ssplus(r1, r2, score, dpcell, secx, secy, xa, ya,
             xlen, ylen, invmap0, invmap, D0_MIN, d0);
         TM = detailed_search(r1, r2, xtm, ytm, xt, xa, ya, xlen, ylen, invmap,
              t, u, simplify_step, score_sum_method, local_d0_search, Lnorm,
@@ -4180,7 +4179,7 @@ int TMalign_main(double **xa, double **ya,
         }
         if (TM > TMmax*ddcc)
         {
-            TM = DP_iter(r1, r2, xtm, ytm, xt, path, val, xa, ya,
+            TM = DP_iter(r1, r2, xtm, ytm, xt, dpcell, xa, ya,
                 xlen, ylen, t, u, invmap, 0, 2, (fast_opt)?2:30,
                 local_d0_search, D0_MIN, Lnorm, d0, score_d8);
             if (TM>TMmax)
@@ -4199,7 +4198,7 @@ int TMalign_main(double **xa, double **ya,
             if (TMtmp<0.56*TMcut)
             {
                 TM1=TM2=TM3=TM4=TM5=TMtmp;
-                clean_up_after_approx_TM(invmap0, invmap, score, path, val,
+                clean_up_after_approx_TM(invmap0, invmap, score, dpcell,
                     xtm, ytm, xt, r1, r2, xlen, minlen);
                 return 5;
             }
@@ -4222,7 +4221,7 @@ int TMalign_main(double **xa, double **ya,
         }
         if (TM > TMmax*ddcc)
         {
-            TM = DP_iter(r1, r2, xtm, ytm, xt, path, val, xa, ya,
+            TM = DP_iter(r1, r2, xtm, ytm, xt, dpcell, xa, ya,
                 xlen, ylen, t, u, invmap, 1, 2, 2, local_d0_search, D0_MIN,
                 Lnorm, d0, score_d8);
             if (TM>TMmax)
@@ -4241,7 +4240,7 @@ int TMalign_main(double **xa, double **ya,
             if (TMtmp<0.58*TMcut)
             {
                 TM1=TM2=TM3=TM4=TM5=TMtmp;
-                clean_up_after_approx_TM(invmap0, invmap, score, path, val,
+                clean_up_after_approx_TM(invmap0, invmap, score, dpcell,
                     xtm, ytm, xt, r1, r2, xlen, minlen);
                 return 6;
             }
@@ -4292,7 +4291,7 @@ int TMalign_main(double **xa, double **ya,
                 for (i = 0; i<ylen; i++) invmap0[i] = invmap[i];
             }
             // Different from get_initial, get_initial_ss and get_initial_ssplus
-            TM = DP_iter(r1, r2, xtm, ytm, xt, path, val, xa, ya,
+            TM = DP_iter(r1, r2, xtm, ytm, xt, dpcell, xa, ya,
                 xlen, ylen, t, u, invmap, 0, 2, (fast_opt)?2:30,
                 local_d0_search, D0_MIN, Lnorm, d0, score_d8);
             if (TM>TMmax)
@@ -4334,7 +4333,7 @@ int TMalign_main(double **xa, double **ya,
         if (TMtmp<0.6*TMcut)
         {
             TM1=TM2=TM3=TM4=TM5=TMtmp;
-            clean_up_after_approx_TM(invmap0, invmap, score, path, val,
+            clean_up_after_approx_TM(invmap0, invmap, score, dpcell,
                 xtm, ytm, xt, r1, r2, xlen, minlen);
             return 7;
         }
@@ -4531,7 +4530,7 @@ int TMalign_main(double **xa, double **ya,
     seqM =seqM.substr(0,kk);
 
     /* free memory */
-    clean_up_after_approx_TM(invmap0, invmap, score, path, val,
+    clean_up_after_approx_TM(invmap0, invmap, score, dpcell,
         xtm, ytm, xt, r1, r2, xlen, minlen);
     delete [] m1;
     delete [] m2;
