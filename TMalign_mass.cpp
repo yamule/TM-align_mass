@@ -1321,7 +1321,7 @@ bool Kabsch(double **x, double **y, int n, int mode, double *rms,
 /* Input: score[1:len1, 1:len2], and gap_open
  * Output: j2i[1:len2] \in {1:len1} U {-1}
  * path[0:len1, 0:len2]=1,2,3, from diagonal, horizontal, vertical */
-void NWDP_TM(double **score, bool **path, double **val,
+void NWDP_TM_A(double **score, bool **path, double **val,
     int len1, int len2, double gap_open, int j2i[])
 {
 
@@ -2686,7 +2686,7 @@ void get_initial_ssplus(double **r1, double **r2, double **score, bool **path,
         y2x0, D0_MIN,d0);
     
     double gap_open=-1.0;
-    NWDP_TM(score, path, val, xlen, ylen, gap_open, y2x);
+    NWDP_TM_A(score, path, val, xlen, ylen, gap_open, y2x);
 }
 
 
