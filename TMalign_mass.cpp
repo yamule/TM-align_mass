@@ -1403,7 +1403,7 @@ void NWDP_TM_A(double **score, bool **path, double **val,
 /* Input: vectors x, y, rotation matrix t, u, scale factor d02, and gap_open
  * Output: j2i[1:len2] \in {1:len1} U {-1}
  * path[0:len1, 0:len2]=1,2,3, from diagonal, horizontal, vertical */
-void NWDP_TM_B(bool **path, double **val, double **x, double **y,
+inline void NWDP_TM_B(bool **path, double **val, double **x, double **y,
     int len1, int len2, double t[3], double u[3][3],
     double d02, double gap_open, int j2i[])
 {
@@ -1981,7 +1981,7 @@ double TMscore8_search_standard( double **r1, double **r2,
     int i, m;
     double score_max, score, rmsd;
     const int kmax = Lali;
-    int k_ali[kmax], ka, k;
+    int k_ali[kmax], ka, k_ali2[kmax], ka2, k;
     double t[3];
     double u[3][3];
     double d;
@@ -2016,6 +2016,7 @@ double TMscore8_search_standard( double **r1, double **r2,
     int L_frag; //fragment length
     int iL_max; //maximum starting postion for the fragment
 
+	ka = -1;
     for (i_init = 0; i_init<n_init; i_init++)
     {
         L_frag = L_ini[i_init];
@@ -2067,6 +2068,7 @@ double TMscore8_search_standard( double **r1, double **r2,
 
             //try to extend the alignment iteratively            
             d = local_d0_search + 1;
+            ka2 = -1;
             for (int it = 0; it<n_it; it++)
             {
                 ka = 0;
@@ -2104,14 +2106,18 @@ double TMscore8_search_standard( double **r1, double **r2,
                 }
 
                 //check if it converges            
-                if (n_cut == ka)
-                {
-                    for (k = 0; k<n_cut; k++)
-                    {
-                        if (i_ali[k] != k_ali[k]) break;
-                    }
-                    if (k == n_cut) break;
+                if(n_cut==ka)
+                {       
+                    if(equal(i_ali,i_ali+n_cut,k_ali)) break;
                 }
+            	
+            	if(n_cut==ka2)
+                {                
+                    if(equal(i_ali,i_ali+n_cut,k_ali2)) break;
+                }
+            	
+	        	std::copy(k_ali, k_ali+ka,k_ali2);
+            	ka2 = ka;
             } //for iteration            
 
             if (i<iL_max)
