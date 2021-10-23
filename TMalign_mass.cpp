@@ -1403,7 +1403,7 @@ void NWDP_TM_A(double **score, bool **path, double **val,
 /* Input: vectors x, y, rotation matrix t, u, scale factor d02, and gap_open
  * Output: j2i[1:len2] \in {1:len1} U {-1}
  * path[0:len1, 0:len2]=1,2,3, from diagonal, horizontal, vertical */
-void NWDP_TM(bool **path, double **val, double **x, double **y,
+void NWDP_TM_B(bool **path, double **val, double **x, double **y,
     int len1, int len2, double t[3], double u[3][3],
     double d02, double gap_open, int j2i[])
 {
@@ -1570,7 +1570,7 @@ void NWDP_SE(bool **path, double **val, double **x, double **y,
  * Input: secondary structure secx, secy, and gap_open
  * Output: j2i[1:len2] \in {1:len1} U {-1}
  * path[0:len1, 0:len2]=1,2,3, from diagonal, horizontal, vertical */
-void NWDP_TM(bool **path, double **val, const char *secx, const char *secy,
+void NWDP_TM_C(bool **path, double **val, const char *secx, const char *secy,
     const int len1, const int len2, const double gap_open, int j2i[])
 {
 
@@ -2514,7 +2514,7 @@ void get_initial_ss(bool **path, double **val,
     const char *secx, const char *secy, int xlen, int ylen, int *y2x)
 {
     double gap_open=-1.0;
-    NWDP_TM(path, val, secx, secy, xlen, ylen, gap_open, y2x);
+    NWDP_TM_C(path, val, secx, secy, xlen, ylen, gap_open, y2x);
 }
 
 
@@ -2606,7 +2606,7 @@ bool get_initial5( double **r1, double **r2, double **xtm, double **ytm,
                 Kabsch(r1, r2, n_frag[i_frag], 1, &rmsd, t, u);
 
                 double gap_open = 0.0;
-                NWDP_TM(path, val, x, y, xlen, ylen,
+                NWDP_TM_B(path, val, x, y, xlen, ylen,
                     t, u, d02, gap_open, invmap);
                 GL = get_score_fast(r1, r2, xtm, ytm, x, y, xlen, ylen,
                     invmap, d0, d0_search, t, u);
@@ -3011,7 +3011,7 @@ double DP_iter(double **r1, double **r2, double **xtm, double **ytm,
     {
         for(iteration=0; iteration<iteration_max; iteration++)
         {           
-            NWDP_TM(path, val, x, y, xlen, ylen,
+            NWDP_TM_B(path, val, x, y, xlen, ylen,
                 t, u, d02, gap_open[g], invmap);
             
             k=0;
