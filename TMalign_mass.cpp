@@ -2110,7 +2110,7 @@ double TMscore8_search_standard( double **r1, double **r2,
                 {       
                     if(equal(i_ali,i_ali+n_cut,k_ali)) break;
                 }
-            	
+            	//なぜかこれやると極々微妙に遅くなるが、一貫性のため入れておく
             	if(n_cut==ka2)
                 {                
                     if(equal(i_ali,i_ali+n_cut,k_ali2)) break;
