@@ -1321,7 +1321,7 @@ bool Kabsch(double **x, double **y, int n, int mode, double *rms,
 /* Input: score[1:len1, 1:len2], and gap_open
  * Output: j2i[1:len2] \in {1:len1} U {-1}
  * path[0:len1, 0:len2]=1,2,3, from diagonal, horizontal, vertical */
-void NWDP_TM(double **score, bool **path, double **val,
+void NWDP_TM_A(double **score, bool **path, double **val,
     int len1, int len2, double gap_open, int j2i[])
 {
 
@@ -1403,7 +1403,7 @@ void NWDP_TM(double **score, bool **path, double **val,
 /* Input: vectors x, y, rotation matrix t, u, scale factor d02, and gap_open
  * Output: j2i[1:len2] \in {1:len1} U {-1}
  * path[0:len1, 0:len2]=1,2,3, from diagonal, horizontal, vertical */
-void NWDP_TM(bool **path, double **val, double **x, double **y,
+void NWDP_TM(bool **path,bool **path_horiz, double **val, double **x, double **y,
     int len1, int len2, double t[3], double u[3][3],
     double d02, double gap_open, int j2i[])
 {
@@ -1417,6 +1417,7 @@ void NWDP_TM(bool **path, double **val, double **x, double **y,
         val[i][0]=0;
         //val[i][0]=i*gap_open;
         path[i][0]=false; //not from diagonal
+        path_horiz[i][0]=true; //from horizontal
     }
 
     for(j=0; j<=len2; j++)
@@ -1424,6 +1425,7 @@ void NWDP_TM(bool **path, double **val, double **x, double **y,
         val[0][j]=0;
         //val[0][j]=j*gap_open;
         path[0][j]=false; //not from diagonal
+        path_horiz[0][j]=false; //not from horizontal
         j2i[j]=-1;    //all are not aligned, only use j2i[1:len2]
     }      
     double xx[3], dij;
@@ -1455,8 +1457,13 @@ void NWDP_TM(bool **path, double **val, double **x, double **y,
             else 
             {
                 path[i][j]=false; //from horizontal
-                if(v>=h) val[i][j]=v;
-                else val[i][j]=h;
+                if(v>=h){
+                    val[i][j]=v;
+                    path_horiz[i][j] = false;
+                }else{
+                    val[i][j]=h;
+                    path_horiz[i][j] = true;
+                }
             }
         } //for i
     } //for j
@@ -1474,6 +1481,12 @@ void NWDP_TM(bool **path, double **val, double **x, double **y,
         }
         else 
         {
+            if(path_horiz[i][j]){
+                i--;
+            }else{
+                j--;
+            }
+            /*
             h=val[i-1][j];
             if(path[i-1][j]) h +=gap_open;
 
@@ -1482,6 +1495,7 @@ void NWDP_TM(bool **path, double **val, double **x, double **y,
 
             if(v>=h) j--;
             else i--;
+            */
         }
     }
 }
@@ -2527,7 +2541,7 @@ void get_initial_ss(bool **path, double **val,
 //the jth element in y is aligned to the ith element in x if i>=0 
 //the jth element in y is aligned to a gap in x if i==-1
 bool get_initial5( double **r1, double **r2, double **xtm, double **ytm,
-    bool **path, double **val,
+    bool **path, bool **path_horiz, double **val,
     double **x, double **y, int xlen, int ylen, int *y2x,
     double d0, double d0_search, const bool fast_opt, const double D0_MIN)
 {
@@ -2607,7 +2621,7 @@ bool get_initial5( double **r1, double **r2, double **xtm, double **ytm,
                 Kabsch(r1, r2, n_frag[i_frag], 1, &rmsd, t, u);
 
                 double gap_open = 0.0;
-                NWDP_TM(path, val, x, y, xlen, ylen,
+                NWDP_TM(path, path_horiz, val, x, y, xlen, ylen,
                     t, u, d02, gap_open, invmap);
                 GL = get_score_fast(r1, r2, xtm, ytm, x, y, xlen, ylen,
                     invmap, d0, d0_search, t, u);
@@ -2686,7 +2700,7 @@ void get_initial_ssplus(double **r1, double **r2, double **score, bool **path,
         y2x0, D0_MIN,d0);
     
     double gap_open=-1.0;
-    NWDP_TM(score, path, val, xlen, ylen, gap_open, y2x);
+    NWDP_TM_A(score, path, val, xlen, ylen, gap_open, y2x);
 }
 
 
@@ -2992,7 +3006,7 @@ double get_initial_fgt(double **r1, double **r2, double **xtm, double **ytm,
 //       vectors x and y, d0
 //output: best alignment that maximizes the TMscore, will be stored in invmap
 double DP_iter(double **r1, double **r2, double **xtm, double **ytm,
-    double **xt, bool **path, double **val, double **x, double **y,
+    double **xt, bool **path, bool **path_horiz, double **val, double **x, double **y,
     int xlen, int ylen, double t[3], double u[3][3], int invmap0[],
     int g1, int g2, int iteration_max, double local_d0_search,
     double D0_MIN, double Lnorm, double d0, double score_d8)
@@ -3012,7 +3026,7 @@ double DP_iter(double **r1, double **r2, double **xtm, double **ytm,
     {
         for(iteration=0; iteration<iteration_max; iteration++)
         {           
-            NWDP_TM(path, val, x, y, xlen, ylen,
+            NWDP_TM(path, path_horiz, val, x, y, xlen, ylen,
                 t, u, d02, gap_open[g], invmap);
             
             k=0;
@@ -3915,13 +3929,14 @@ double approx_TM(const int xlen, const int ylen, const int a_opt,
 }
 
 void clean_up_after_approx_TM(int *invmap0, int *invmap,
-    double **score, bool **path, double **val, double **xtm, double **ytm,
+    double **score, bool **path, bool **path_horiz, double **val, double **xtm, double **ytm,
     double **xt, double **r1, double **r2, const int xlen, const int minlen)
 {
     delete [] invmap0;
     delete [] invmap;
     DeleteArray(&score, xlen+1);
     DeleteArray(&path, xlen+1);
+    DeleteArray(&path_horiz, xlen+1);
     DeleteArray(&val, xlen+1);
     DeleteArray(&xtm, minlen);
     DeleteArray(&ytm, minlen);
@@ -3956,6 +3971,7 @@ int TMalign_main(double **xa, double **ya,
     double t[3], u[3][3]; //Kabsch translation vector and rotation matrix
     double **score;       // Input score table for dynamic programming
     bool   **path;        // for dynamic programming  
+    bool   **path_horiz;        // for dynamic programming  
     double **val;         // for dynamic programming  
     double **xtm, **ytm;  // for TMscore search engine
     double **xt;          //for saving the superposed version of r_1 or xtm
@@ -3968,6 +3984,7 @@ int TMalign_main(double **xa, double **ya,
     int minlen = min(xlen, ylen);
     NewArray(&score, xlen+1, ylen+1);
     NewArray(&path, xlen+1, ylen+1);
+    NewArray(&path_horiz, xlen+1, ylen+1);
     NewArray(&val, xlen+1, ylen+1);
     NewArray(&xtm, minlen, 3);
     NewArray(&ytm, minlen, 3);
@@ -4054,7 +4071,7 @@ int TMalign_main(double **xa, double **ya,
         if (TM>TMmax) TMmax = TM;
         if (TMcut>0) copy_t_u(t, u, t0, u0);
         //run dynamic programing iteratively to find the best alignment
-        TM = DP_iter(r1, r2, xtm, ytm, xt, path, val, xa, ya, xlen, ylen,
+        TM = DP_iter(r1, r2, xtm, ytm, xt, path, path_horiz, val, xa, ya, xlen, ylen,
              t, u, invmap, 0, 2, (fast_opt)?2:30, local_d0_search,
              D0_MIN, Lnorm, d0, score_d8);
         if (TM>TMmax)
@@ -4072,7 +4089,7 @@ int TMalign_main(double **xa, double **ya,
             if (TMtmp<0.5*TMcut)
             {
                 TM1=TM2=TM3=TM4=TM5=TMtmp;
-                clean_up_after_approx_TM(invmap0, invmap, score, path, val,
+                clean_up_after_approx_TM(invmap0, invmap, score, path, path_horiz, val,
                     xtm, ytm, xt, r1, r2, xlen, minlen);
                 return 2;
             }
@@ -4093,7 +4110,7 @@ int TMalign_main(double **xa, double **ya,
         }
         if (TM > TMmax*0.2)
         {
-            TM = DP_iter(r1, r2, xtm, ytm, xt, path, val, xa, ya,
+            TM = DP_iter(r1, r2, xtm, ytm, xt, path, path_horiz, val, xa, ya,
                 xlen, ylen, t, u, invmap, 0, 2, (fast_opt)?2:30,
                 local_d0_search, D0_MIN, Lnorm, d0, score_d8);
             if (TM>TMmax)
@@ -4112,7 +4129,7 @@ int TMalign_main(double **xa, double **ya,
             if (TMtmp<0.52*TMcut)
             {
                 TM1=TM2=TM3=TM4=TM5=TMtmp;
-                clean_up_after_approx_TM(invmap0, invmap, score, path, val,
+                clean_up_after_approx_TM(invmap0, invmap, score, path, path_horiz, val,
                     xtm, ytm, xt, r1, r2, xlen, minlen);
                 return 3;
             }
@@ -4122,7 +4139,7 @@ int TMalign_main(double **xa, double **ya,
         /*    get initial alignment based on local superposition    */
         /************************************************************/
         //=initial5 in original TM-align
-        if (get_initial5( r1, r2, xtm, ytm, path, val, xa, ya,
+        if (get_initial5( r1, r2, xtm, ytm, path, path_horiz,val, xa, ya,
             xlen, ylen, invmap, d0, d0_search, fast_opt, D0_MIN))
         {
             TM = detailed_search(r1, r2, xtm, ytm, xt, xa, ya, xlen, ylen,
@@ -4136,7 +4153,7 @@ int TMalign_main(double **xa, double **ya,
             }
             if (TM > TMmax*ddcc)
             {
-                TM = DP_iter(r1, r2, xtm, ytm, xt, path, val, xa, ya,
+                TM = DP_iter(r1, r2, xtm, ytm, xt, path, path_horiz, val, xa, ya,
                     xlen, ylen, t, u, invmap, 0, 2, 2, local_d0_search,
                     D0_MIN, Lnorm, d0, score_d8);
                 if (TM>TMmax)
@@ -4158,7 +4175,7 @@ int TMalign_main(double **xa, double **ya,
             if (TMtmp<0.54*TMcut)
             {
                 TM1=TM2=TM3=TM4=TM5=TMtmp;
-                clean_up_after_approx_TM(invmap0, invmap, score, path, val,
+                clean_up_after_approx_TM(invmap0, invmap, score, path, path_horiz, val,
                     xtm, ytm, xt, r1, r2, xlen, minlen);
                 return 4;
             }
@@ -4181,7 +4198,7 @@ int TMalign_main(double **xa, double **ya,
         }
         if (TM > TMmax*ddcc)
         {
-            TM = DP_iter(r1, r2, xtm, ytm, xt, path, val, xa, ya,
+            TM = DP_iter(r1, r2, xtm, ytm, xt, path, path_horiz, val, xa, ya,
                 xlen, ylen, t, u, invmap, 0, 2, (fast_opt)?2:30,
                 local_d0_search, D0_MIN, Lnorm, d0, score_d8);
             if (TM>TMmax)
@@ -4200,7 +4217,7 @@ int TMalign_main(double **xa, double **ya,
             if (TMtmp<0.56*TMcut)
             {
                 TM1=TM2=TM3=TM4=TM5=TMtmp;
-                clean_up_after_approx_TM(invmap0, invmap, score, path, val,
+                clean_up_after_approx_TM(invmap0, invmap, score, path, path_horiz, val,
                     xtm, ytm, xt, r1, r2, xlen, minlen);
                 return 5;
             }
@@ -4223,7 +4240,7 @@ int TMalign_main(double **xa, double **ya,
         }
         if (TM > TMmax*ddcc)
         {
-            TM = DP_iter(r1, r2, xtm, ytm, xt, path, val, xa, ya,
+            TM = DP_iter(r1, r2, xtm, ytm, xt, path, path_horiz, val, xa, ya,
                 xlen, ylen, t, u, invmap, 1, 2, 2, local_d0_search, D0_MIN,
                 Lnorm, d0, score_d8);
             if (TM>TMmax)
@@ -4242,7 +4259,7 @@ int TMalign_main(double **xa, double **ya,
             if (TMtmp<0.58*TMcut)
             {
                 TM1=TM2=TM3=TM4=TM5=TMtmp;
-                clean_up_after_approx_TM(invmap0, invmap, score, path, val,
+                clean_up_after_approx_TM(invmap0, invmap, score, path, path_horiz, val,
                     xtm, ytm, xt, r1, r2, xlen, minlen);
                 return 6;
             }
@@ -4293,7 +4310,7 @@ int TMalign_main(double **xa, double **ya,
                 for (i = 0; i<ylen; i++) invmap0[i] = invmap[i];
             }
             // Different from get_initial, get_initial_ss and get_initial_ssplus
-            TM = DP_iter(r1, r2, xtm, ytm, xt, path, val, xa, ya,
+            TM = DP_iter(r1, r2, xtm, ytm, xt, path, path_horiz, val, xa, ya,
                 xlen, ylen, t, u, invmap, 0, 2, (fast_opt)?2:30,
                 local_d0_search, D0_MIN, Lnorm, d0, score_d8);
             if (TM>TMmax)
@@ -4335,7 +4352,7 @@ int TMalign_main(double **xa, double **ya,
         if (TMtmp<0.6*TMcut)
         {
             TM1=TM2=TM3=TM4=TM5=TMtmp;
-            clean_up_after_approx_TM(invmap0, invmap, score, path, val,
+            clean_up_after_approx_TM(invmap0, invmap, score, path, path_horiz, val,
                 xtm, ytm, xt, r1, r2, xlen, minlen);
             return 7;
         }
@@ -4532,7 +4549,7 @@ int TMalign_main(double **xa, double **ya,
     seqM =seqM.substr(0,kk);
 
     /* free memory */
-    clean_up_after_approx_TM(invmap0, invmap, score, path, val,
+    clean_up_after_approx_TM(invmap0, invmap, score, path, path_horiz, val,
         xtm, ytm, xt, r1, r2, xlen, minlen);
     delete [] m1;
     delete [] m2;
