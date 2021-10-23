@@ -4986,10 +4986,10 @@ int main(int argc, char *argv[])
     double **xtm, **ytm;  // for TMscore search engine
     double **xt;          //for saving the superposed version of r_1 or xtm
     double **r1, **r2;    // for Kabsch rotation
-
-    int minlen_buff = min(xlen_buff, ylen_buff);
     int *invmap0;
     int *invmap;
+
+    int minlen_buff = min(xlen_buff, ylen_buff);
 
     
     /* loop over file names */
