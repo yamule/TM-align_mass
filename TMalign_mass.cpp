@@ -1949,23 +1949,13 @@ double TMscore8_search(double **r1, double **r2, double **xtm, double **ytm,
                 
                 //check if it converges            
                 if(n_cut==ka)
-                {                
-                    for(k=0; k<n_cut; k++)
-                    {
-                        if(i_ali[k]!=k_ali[k]) break;
-                    }
-                    if(k==n_cut) break;
+                {       
+                    if(equal(i_ali,i_ali+n_cut,k_ali)) break;
                 }
             	
             	if(n_cut==ka2)
                 {                
-                    for(k=0; k<ka2; k++)
-                    {
-                        if(i_ali[k]!=k_ali2[k]) break;
-                    }
-                	if(k==n_cut){
-                		break;
-                	}
+                    if(equal(i_ali,i_ali+n_cut,k_ali2)) break;
                 }
             	
             	
