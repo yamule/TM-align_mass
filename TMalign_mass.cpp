@@ -1419,14 +1419,14 @@ void NWDP_TM_B(DPCell **dpcell, double **x, double **y,
     {
         dpcell[i][0].val=0;
         //dpcell[i][0].val=i*gap_open;
-        dpcell[i][0].path=0.0; //not from diagonal
+        dpcell[i][0].path=false; //not from diagonal
     }
 
     for(j=0; j<=len2; j++)
     {
         dpcell[0][j].val=0;
         //dpcell[0][j].val=j*gap_open;
-        dpcell[0][j].path=0.0; //not from diagonal
+        dpcell[0][j].path=false; //not from diagonal
         j2i[j]=-1;    //all are not aligned, only use j2i[1:len2]
     }      
     double xx[3], dij;
@@ -1451,12 +1451,12 @@ void NWDP_TM_B(DPCell **dpcell, double **x, double **y,
 
             if(d>=h && d>=v)
             {
-                dpcell[i][j].path=1.0; //from diagonal
+                dpcell[i][j].path=true; //from diagonal
                 dpcell[i][j].val=d;
             }
             else 
             {
-                dpcell[i][j].path=0.0; //from horizontal
+                dpcell[i][j].path=false; //from horizontal
                 if(v>=h) dpcell[i][j].val=v;
                 else dpcell[i][j].val=h;
             }
