@@ -1875,11 +1875,9 @@ double TMscore8_search(double **r1, double **r2, double **xtm, double **ytm,
                 r2[k][2]=ytm[kk][2];
 
                 k_ali[ka]=kk;
-            	k_ali2[k]=kk;
                 ka++;
             }
             
-        	ka2 = ka;
         	
             //extract rotation matrix based on the fragment
             Kabsch(r1, r2, L_frag, 1, &rmsd, t, u);
@@ -1907,11 +1905,10 @@ double TMscore8_search(double **r1, double **r2, double **xtm, double **ytm,
             
             //try to extend the alignment iteratively            
             d = local_d0_search + 1;
+            ka2 = -1;
             for(int it=0; it<n_it; it++)            
             {
             	
-	        	std::copy(k_ali, k_ali+ka,k_ali2);
-            	ka2 = ka;
             	
                 ka=0;
                 for(k=0; k<n_cut; k++)
@@ -1958,6 +1955,8 @@ double TMscore8_search(double **r1, double **r2, double **xtm, double **ytm,
                     if(equal(i_ali,i_ali+n_cut,k_ali2)) break;
                 }
             	
+	        	std::copy(k_ali, k_ali+ka,k_ali2);
+            	ka2 = ka;
             	
             } //for iteration            
 
