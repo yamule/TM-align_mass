@@ -888,13 +888,12 @@ int read_PDB(const vector<string> &PDB_lines, double **a, char *seq,
 
 int saveByteFile( const string &outfile,int num_residues, double **a, char *seq,
     vector<string> &resi_vec, const int byresi_opt){
-    ofstream fileOut(outfile.c_str(), std::ios::binary);
-    fileOut.open(outfile.c_str(), ios::binary | ios::out);
+    ofstream fileOut(outfile.c_str(), std::ios::binary| ios::out);
     
     static_assert(4 == sizeof(int));
     static_assert(8 == sizeof(double));
 
-    if (fileIn.is_open() && fileIn.good())
+    if (fileOut.is_open() && fileOut.good())
     {
         char siz[4];
         memcpy(&siz[0],&num_residues,sizeof(int));
@@ -905,7 +904,6 @@ int saveByteFile( const string &outfile,int num_residues, double **a, char *seq,
             rs[ii] = 0;
         }
 
-        int rsiz = resi_vec.size();
         fileOut.write(&seq[0], num_residues);
         
         for(int rr = 0;rr < resi_vec.size();rr++){
@@ -920,14 +918,19 @@ int saveByteFile( const string &outfile,int num_residues, double **a, char *seq,
             }
         }
         fileOut.write(&rs[0], num_residues*6);
+
         char buff[sizeof(double)*3*num_residues];
-        memcpy(&buff,a[0],sizeof(double)*3*rsiz);
-        fileOut.write(&buff,sizeof(double)*3*rsiz);
+        
+        memcpy(&buff[0],&a[0][0],sizeof(double)*3*num_residues);
+        //printf("%f %f\n",*((double *) &buff[24+8]),a[1][1]);//debug
+        fileOut.write(&buff[0],sizeof(double)*3*num_residues);
+        
         fileOut.close();
+        
         return 1;
     }else{
 
-        printf("Can not open file %s for writing.",outfile);
+        printf("Can not open file %s for writing.\n",outfile.c_str());
         return -1;
     }
 }
@@ -5114,6 +5117,8 @@ int main(int argc, char *argv[])
             secx = new char[xlen + 1];
             xlen = read_PDB(PDB_lines1[chain_i], xa, seqx, 
                 resi_vec1, byresi_opt?byresi_opt:o_opt);
+            saveByteFile("../test.dat",xlen,xa, seqx,resi_vec1,byresi_opt?byresi_opt:o_opt);
+            exit(0);
             if (mirror_opt) for (r=0;r<xlen;r++) xa[r][2]=-xa[r][2];
             make_sec(xa, xlen, secx); // secondary structure assignment
 
