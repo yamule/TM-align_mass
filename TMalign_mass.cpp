@@ -252,18 +252,42 @@ template <typename T> inline T getmin(const T &a, const T &b)
     return b<a?b:a;
 }
 
-template <class A> void NewArray(A *** array, int Narray1, int Narray2)
+//from https://stackoverflow.com/questions/21943621/how-to-create-a-contiguous-2d-array-in-c
+//PaulMcKenzie 's post
+template <typename T>
+T** create2DArray(unsigned nrows, unsigned ncols, const T& val = T())
 {
-    *array=new A* [Narray1];
-    for(int i=0; i<Narray1; i++) *(*array+i)=new A [Narray2];
+   if (nrows == 0)
+        throw std::invalid_argument("number of rows is 0");
+   if (ncols == 0)
+        throw std::invalid_argument("number of columns is 0");
+   T** ptr = nullptr;
+   T* pool = nullptr;
+   try
+   {
+       ptr = new T*[nrows];  // allocate pointers (can throw here)
+       pool = new T[nrows*ncols]{val};  // allocate pool (can throw here)
+
+       // now point the row pointers to the appropriate positions in
+       // the memory pool
+       for (unsigned i = 0; i < nrows; ++i, pool += ncols )
+           ptr[i] = pool;
+
+       // Done.
+       return ptr;
+   }
+   catch (std::bad_alloc& ex)
+   {
+       delete [] ptr; // either this is nullptr or it was allocated
+       throw ex;  // memory allocation error
+   }
 }
 
-template <class A> void DeleteArray(A *** array, int Narray)
+template <typename T>
+void delete2DArray(T** arr)
 {
-    for(int i=0; i<Narray; i++)
-        if(*(*array+i)) delete [] *(*array+i);
-    if(Narray) delete [] (*array);
-    (*array)=NULL;
+   delete [] arr[0];  // remove the pool
+   delete [] arr;     // remove the pointers
 }
 
 string AAmap(char A)
@@ -1864,18 +1888,12 @@ double TMscore8_search(double **r1, double **r2, double **xtm, double **ytm,
             for(k=0; k<L_frag; k++)
             {
                 int kk=k+i;
-                r1[k][0]=xtm[kk][0];  
-                r1[k][1]=xtm[kk][1]; 
-                r1[k][2]=xtm[kk][2];
-                
-                r2[k][0]=ytm[kk][0];  
-                r2[k][1]=ytm[kk][1]; 
-                r2[k][2]=ytm[kk][2];
-
                 k_ali[ka]=kk;
                 ka++;
             }
-            
+        
+            memcpy(r1[0],xtm[i],sizeof(double)*3*L_frag);
+            memcpy(r2[0],ytm[i],sizeof(double)*3*L_frag);
         	
             //extract rotation matrix based on the fragment
             Kabsch(r1, r2, L_frag, 1, &rmsd, t, u);
@@ -2025,20 +2043,16 @@ double TMscore8_search_standard( double **r1, double **r2,
         {
             //extract the fragment starting from position i 
             ka = 0;
-            for (k = 0; k<L_frag; k++)
+            for(k=0; k<L_frag; k++)
             {
-                int kk = k + i;
-                r1[k][0] = xtm[kk][0];
-                r1[k][1] = xtm[kk][1];
-                r1[k][2] = xtm[kk][2];
-
-                r2[k][0] = ytm[kk][0];
-                r2[k][1] = ytm[kk][1];
-                r2[k][2] = ytm[kk][2];
-
-                k_ali[ka] = kk;
+                int kk=k+i;
+                k_ali[ka]=kk;
                 ka++;
             }
+        
+            memcpy(r1[0],xtm[i],sizeof(double)*3*L_frag);
+            memcpy(r2[0],ytm[i],sizeof(double)*3*L_frag);
+
             //extract rotation matrix based on the fragment
             Kabsch(r1, r2, L_frag, 1, &rmsd, t, u);
             if (simplify_step != 1)
@@ -2595,6 +2609,7 @@ bool get_initial5( double **r1, double **r2, double **xtm, double **ytm,
         {
             for (int j = 0; j<m2; j = j + n_jump2)
             {
+                /*
                 for (int k = 0; k<n_frag[i_frag]; k++) //fragment in y
                 {
                     r1[k][0] = x[k + i][0];
@@ -2605,6 +2620,10 @@ bool get_initial5( double **r1, double **r2, double **xtm, double **ytm,
                     r2[k][1] = y[k + j][1];
                     r2[k][2] = y[k + j][2];
                 }
+                */
+                memcpy(r1[0],x[i],sizeof(double)*3*n_frag[i_frag]);
+                memcpy(r2[0],y[j],sizeof(double)*3*n_frag[i_frag]);
+
 
                 // superpose the two structures and rotate it
                 Kabsch(r1, r2, n_frag[i_frag], 1, &rmsd, t, u);
@@ -3923,14 +3942,14 @@ void clean_up_after_approx_TM(int *invmap0, int *invmap,
 {
     delete [] invmap0;
     delete [] invmap;
-    DeleteArray(&score, xlen+1);
-    DeleteArray(&path, xlen+1);
-    DeleteArray(&val, xlen+1);
-    DeleteArray(&xtm, minlen);
-    DeleteArray(&ytm, minlen);
-    DeleteArray(&xt, xlen);
-    DeleteArray(&r1, minlen);
-    DeleteArray(&r2, minlen);
+    delete2DArray(score);
+    delete2DArray(path);
+    delete2DArray(val);
+    delete2DArray(xtm);
+    delete2DArray(ytm);
+    delete2DArray(xt);
+    delete2DArray(r1);
+    delete2DArray(r2);
     return;
 }
 
@@ -3957,26 +3976,21 @@ int TMalign_main(double **xa, double **ya,
     double Lnorm;         //normalization length
     double score_d8,d0,d0_search,dcu0;//for TMscore search
     double t[3], u[3][3]; //Kabsch translation vector and rotation matrix
-    double **score;       // Input score table for dynamic programming
-    bool   **path;        // for dynamic programming  
-    double **val;         // for dynamic programming  
-    double **xtm, **ytm;  // for TMscore search engine
-    double **xt;          //for saving the superposed version of r_1 or xtm
-    double **r1, **r2;    // for Kabsch rotation
-
+    
     /***********************/
     /* allocate memory     */
     /***********************/
     
     int minlen = min(xlen, ylen);
-    NewArray(&score, xlen+1, ylen+1);
-    NewArray(&path, xlen+1, ylen+1);
-    NewArray(&val, xlen+1, ylen+1);
-    NewArray(&xtm, minlen, 3);
-    NewArray(&ytm, minlen, 3);
-    NewArray(&xt, xlen, 3);
-    NewArray(&r1, minlen, 3);
-    NewArray(&r2, minlen, 3);
+    
+    double **score = create2DArray<double>(xlen+1, ylen+1);
+    bool **path = create2DArray<bool>(xlen+1, ylen+1);
+    double **val = create2DArray<double>(xlen+1, ylen+1);
+    double **xtm = create2DArray<double>(minlen, 3);
+    double **ytm = create2DArray<double>(minlen, 3);
+    double **xt = create2DArray<double>(xlen, 3);
+    double **r1 = create2DArray<double>(minlen, 3);
+    double **r2 = create2DArray<double>(minlen, 3);
 
     /***********************/
     /*    parameter set    */
@@ -4561,7 +4575,6 @@ int CPalign_main(double **xa, double **ya,
 {
     char   *seqx_cp, *seqy_cp; // for the protein sequence 
     char   *secx_cp, *secy_cp; // for the secondary structure 
-    double **xa_cp, **ya_cp;   // coordinates
     string seqxA_cp,seqyA_cp;  // alignment
     int    i,r;
     int    cp_point=0;    // position of circular permutation
@@ -4569,7 +4582,7 @@ int CPalign_main(double **xa, double **ya,
     int    cp_aln_current;// amount of aligned residue in sliding window
 
     /* duplicate structure */
-    NewArray(&xa_cp, xlen*2, 3);
+    double **xa_cp = create2DArray<double>(xlen*2, 3);
     seqx_cp = new char[xlen*2 + 1];
     secx_cp = new char[xlen*2 + 1];
     for (r=0;r<xlen;r++)
@@ -4696,7 +4709,7 @@ int CPalign_main(double **xa, double **ya,
     /* clean up */
     delete[]seqx_cp;
     delete[]secx_cp;
-    DeleteArray(&xa_cp,xlen*2);
+    delete2DArray(xa_cp);
     seqxA_cp.clear();
     seqyA_cp.clear();
     return cp_point;
@@ -4971,7 +4984,7 @@ int main(int argc, char *argv[])
     int    xchainnum,ychainnum;// number of chains in a PDB file
     char   *seqx, *seqy;       // for the protein sequence 
     char   *secx, *secy;       // for the secondary structure 
-    double **xa, **ya;         // for input vectors xa[0...xlen-1][0..2] and
+    //double **xa, **ya;         // for input vectors xa[0...xlen-1][0..2] and
                                // ya[0...ylen-1][0..2], in general,
                                // ya is regarded as native structure 
                                // --> superpose xa onto ya
@@ -5006,7 +5019,7 @@ int main(int argc, char *argv[])
                 cerr<<"Sequence is too short <3!: "<<xname<<endl;
                 continue;
             }
-            NewArray(&xa, xlen, 3);
+            double **xa = create2DArray<double>(xlen, 3);
             seqx = new char[xlen + 1];
             secx = new char[xlen + 1];
             xlen = read_PDB(PDB_lines1[chain_i], xa, seqx, 
@@ -5045,7 +5058,7 @@ int main(int argc, char *argv[])
                         cerr<<"Sequence is too short <3!: "<<yname<<endl;
                         continue;
                     }
-                    NewArray(&ya, ylen, 3);
+                    double **ya = create2DArray<double>(ylen, 3);
                     seqy = new char[ylen + 1];
                     secy = new char[ylen + 1];
                     ylen = read_PDB(PDB_lines2[chain_j], ya, seqy,
@@ -5112,7 +5125,7 @@ int main(int argc, char *argv[])
                     seqM.clear();
                     seqxA.clear();
                     seqyA.clear();
-                    DeleteArray(&ya, ylen);
+                    delete2DArray(ya);
                     delete [] seqy;
                     delete [] secy;
                     resi_vec2.clear();
@@ -5128,7 +5141,7 @@ int main(int argc, char *argv[])
                 }
             } // j
             PDB_lines1[chain_i].clear();
-            DeleteArray(&xa, xlen);
+            delete2DArray(xa);
             delete [] seqx;
             delete [] secx;
             resi_vec1.clear();
