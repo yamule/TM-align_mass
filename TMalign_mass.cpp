@@ -899,28 +899,29 @@ int saveByteFile( const string &outfile,int num_residues, double **a, char *seq,
         memcpy(&siz[0],&num_residues,sizeof(int));
         fileOut.write(&siz[0], 4);
 
+        fileOut.write(&seq[0], num_residues);
+
         char rs[6*num_residues];
         for(int ii = 0;ii < num_residues*6;ii++){
             rs[ii] = 0;
         }
 
-        fileOut.write(&seq[0], num_residues);
-        
-        for(int rr = 0;rr < resi_vec.size();rr++){
-            char c[resi_vec[rr].size() + 1];
-            strcpy(c, resi_vec[rr].c_str());
-            if(byresi_opt >= 2){
-                memcpy(&rs[6*rr],&c[0],6);
-            }else if(byresi_opt == 1){
-                memcpy(&rs[6*rr],&c[0],5);
-            }else{
-                //do nothing
+        if(byresi_opt >= 1){    
+            for(int rr = 0;rr < resi_vec.size();rr++){
+                char c[resi_vec[rr].size() + 1];
+                strcpy(c, resi_vec[rr].c_str());
+                if(byresi_opt >= 2){
+                    memcpy(&rs[6*rr],&c[0],6);
+                }else if(byresi_opt == 1){
+                    memcpy(&rs[6*rr],&c[0],5);
+                }else{
+                    //do nothing
+                }
             }
         }
         fileOut.write(&rs[0], num_residues*6);
 
         char buff[sizeof(double)*3*num_residues];
-        
         memcpy(&buff[0],&a[0][0],sizeof(double)*3*num_residues);
         //printf("%f %f\n",*((double *) &buff[24+8]),a[1][1]);//debug
         fileOut.write(&buff[0],sizeof(double)*3*num_residues);
@@ -935,7 +936,7 @@ int saveByteFile( const string &outfile,int num_residues, double **a, char *seq,
     }
 }
 
-int readByteFile( const string &fname_lign, double **a, char *seq,
+int loadByteFile( const string &fname_lign, double ***a_, char **seq_,
     vector<string> &resi_vec, const int byresi_opt){
         
     static_assert(4 == sizeof(int));
@@ -954,16 +955,23 @@ int readByteFile( const string &fname_lign, double **a, char *seq,
         fileIn.read(buff, 4);
 
         int num_records = *((int *) buff);
-        a = create2DArray<double>(num_records,3);
-        seq = new char[num_records+1];
+        printf("%d****\n",num_records);
+        double **a = create2DArray<double>(num_records,3);
+        char *seq = new char[num_records+1];
+
         int record_size = 1+1*6+8*3;
         //char, char*6, double*3
+
         char contents[num_records*record_size];
         fileIn.read(contents, num_records*record_size);
+        
         char resi[num_records*6];
         memcpy(&seq[0],&contents[0],num_records);
         memcpy(&resi[0],&contents[0]+num_records,num_records*6);
         memcpy(a[0],&contents[0]+num_records*7,num_records*8*3);
+        for(int jj = 0;jj < 100;jj++){
+            printf("%d %f\n",jj,a[jj][0]);
+        }
         for(int i = 0;i < num_records;i++){
             if (byresi_opt>=2){
                 std::string strr(&resi[i*6], &resi[i*6] + 6);
@@ -974,7 +982,9 @@ int readByteFile( const string &fname_lign, double **a, char *seq,
                 resi_vec.push_back(strr);
             }
         }
-        seq[num_records]='\0'; 
+        seq[num_records]='\0';
+        *a_ = a;
+        *seq_ = seq;
         return num_records;
     }
     return -1;
@@ -5118,6 +5128,12 @@ int main(int argc, char *argv[])
             xlen = read_PDB(PDB_lines1[chain_i], xa, seqx, 
                 resi_vec1, byresi_opt?byresi_opt:o_opt);
             saveByteFile("../test.dat",xlen,xa, seqx,resi_vec1,byresi_opt?byresi_opt:o_opt);
+            
+            delete [] seqx;
+            delete2DArray(xa);
+            resi_vec1.clear();
+            loadByteFile("../test.dat",&xa, &seqx,resi_vec1,byresi_opt?byresi_opt:o_opt);
+            printf("%f %s\n",xa[0][0],seqx);
             exit(0);
             if (mirror_opt) for (r=0;r<xlen;r++) xa[r][2]=-xa[r][2];
             make_sec(xa, xlen, secx); // secondary structure assignment
