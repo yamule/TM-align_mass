@@ -1426,17 +1426,15 @@ inline void NWDP_TM_B(bool **path, double **val, double **x, double **y,
         path[0][j]=false; //not from diagonal
         j2i[j]=-1;    //all are not aligned, only use j2i[1:len2]
     }      
-    double xx[3], dij;
-
-
+    double xx[3];
     //decide matrix and path
     for(i=1; i<=len1; i++)
     {
         transform(t, u, &x[i-1][0], xx);
         for(j=1; j<=len2; j++)
         {
-            dij=dist(xx, &y[j-1][0]);    
-            d=val[i-1][j-1] +  1.0/(1+dij/d02);
+
+            d=val[i-1][j-1] +  1.0/(1+dist(xx, &y[j-1][0])/d02);
 
             //symbol insertion in horizontal (= a gap in vertical)
             h=val[i-1][j];
