@@ -886,7 +886,8 @@ int read_PDB(const vector<string> &PDB_lines, double **a, char *seq,
     return i;
 }
 
-int saveBinaryFile( const string &outfile,int num_residues, double **a, char *seq,
+int saveBinaryFile( const string &outfile,int extra_data_size,char *exdata,int num_residues
+, double **a, char *seq,
     vector<string> &resi_vec, const int byresi_opt){
     ofstream fileOut(outfile.c_str(), std::ios::binary| ios::out);
     
@@ -895,6 +896,13 @@ int saveBinaryFile( const string &outfile,int num_residues, double **a, char *se
 
     if (fileOut.is_open() && fileOut.good())
     {
+        char exdd[4];
+        memcpy(&exdd[0],&extra_data_size,sizeof(int));
+        fileOut.write(&exdd[0], 4);
+        if(extra_data_size > 0){
+            fileOut.write(&exdata[0], extra_data_size);
+        }
+
         char siz[4];
         memcpy(&siz[0],&num_residues,sizeof(int));
         fileOut.write(&siz[0], 4);
@@ -936,7 +944,7 @@ int saveBinaryFile( const string &outfile,int num_residues, double **a, char *se
     }
 }
 
-int loadBinaryFile( const string &fname_lign, double ***a_, char **seq_,
+int loadBinaryFile( const string &fname_lign,char **exdata_, double ***a_, char **seq_,
     vector<string> &resi_vec, const int byresi_opt){
         
     static_assert(4 == sizeof(int));
@@ -952,8 +960,16 @@ int loadBinaryFile( const string &fname_lign, double ***a_, char **seq_,
     if (fileIn.is_open() && fileIn.good())
     {
         char buff[4];
-        fileIn.read(buff, 4);
+        fileIn.read(buff, 4);        
+        int extra_data_size = *((int *) buff);
 
+        if(extra_data_size > 0){
+            char *exdata = new char[extra_data_size];
+            fileIn.read(exdata, extra_data_size);
+            *exdata_ = exdata;
+        }
+
+        fileIn.read(buff, 4);
         int num_records = *((int *) buff);
 
         double **a = create2DArray<double>(num_records,3);
@@ -4831,6 +4847,7 @@ int main(int argc, char *argv[])
     /**********************/
     string xname       = "";
     string yname       = "";
+    string binout       = "";
     string fname_super = ""; // file name for superposed structure
     string fname_lign  = ""; // file name for user alignment
     string fname_matrix= ""; // file name for output matrix
@@ -4985,13 +5002,17 @@ int main(int argc, char *argv[])
         {
             het_opt=atoi(argv[i + 1]); i++;
         }
+        else if ( !strcmp(argv[i],"-bin_convert") && i < (argc-1) )
+        {
+            binout=argv[i+1]; i++;
+        }
         else if (xname.size() == 0) xname=argv[i];
         else if (yname.size() == 0) yname=argv[i];
         else PrintErrorAndQuit(string("ERROR! Undefined option ")+argv[i]);
     }
 
-    if(xname.size()==0 || (yname.size()==0 && dir_opt.size()==0) || 
-                          (yname.size()    && dir_opt.size()))
+    if(xname.size()==0 || binout.size() == 0 && ((yname.size()==0 && dir_opt.size()==0) || 
+                          (yname.size()    && dir_opt.size())))
     {
         if (h_opt) print_help(h_opt);
         if (v_opt)
@@ -5094,6 +5115,57 @@ int main(int argc, char *argv[])
     vector<string> resi_vec1;  // residue index for chain1
     vector<string> resi_vec2;  // residue index for chain2
 
+    if(binout.size() > 0){
+        for (i=0;i<chain1_list.size();i++){
+            /* parse chain 1 */
+            xname=chain1_list[i];
+            xchainnum=get_PDB_lines(xname, PDB_lines1, chainID_list1,
+                mol_vec1, ter_opt, infmt1_opt, atom_opt, split_opt, het_opt);
+            if (!xchainnum)
+            {
+                cerr<<"Warning! Cannot parse file: "<<xname
+                    <<". Chain number 0."<<endl;
+                continue;
+            }
+            for (chain_i=0;chain_i<xchainnum;chain_i++)
+            {
+                xlen=PDB_lines1[chain_i].size();
+                if (!xlen)
+                {
+                    cerr<<"Warning! Cannot parse file: "<<xname
+                        <<". Chain length 0."<<endl;
+                    continue;
+                }
+                else if (xlen<3)
+                {
+                    cerr<<"Sequence is too short <3!: "<<xname<<endl;
+                    continue;
+                }
+                double **xa = create2DArray<double>(xlen, 3);
+                seqx = new char[xlen + 1];
+                xlen = read_PDB(PDB_lines1[chain_i], xa, seqx, 
+                    resi_vec1, byresi_opt?byresi_opt:o_opt);
+                char *exdata = new char[5];
+                exdata[0] ='D';
+                exdata[1] ='U';
+                exdata[2] ='M';
+                exdata[3] ='M';
+                exdata[4] ='Y';
+                std::string outname = binout;
+                if(xchainnum > 1){
+                    outname += "."+ std::to_string(chain_i);
+                }
+                saveBinaryFile(
+                outname,5,exdata
+                ,xlen, xa, seqx,resi_vec1
+                ,byresi_opt?byresi_opt:o_opt);
+                delete[] seqx;
+                delete[] exdata;
+                delete2DArray(xa);
+            }
+        }
+        exit(0);
+    }
     /* loop over file names */
     for (i=0;i<chain1_list.size();i++)
     {
@@ -5127,14 +5199,7 @@ int main(int argc, char *argv[])
             secx = new char[xlen + 1];
             xlen = read_PDB(PDB_lines1[chain_i], xa, seqx, 
                 resi_vec1, byresi_opt?byresi_opt:o_opt);
-            saveBinaryFile("../test.dat",xlen,xa, seqx,resi_vec1,byresi_opt?byresi_opt:o_opt);
             
-            delete [] seqx;
-            delete2DArray(xa);
-            resi_vec1.clear();
-            loadBinaryFile("../test.dat",&xa, &seqx,resi_vec1,byresi_opt?byresi_opt:o_opt);
-            printf("%f %s\n",xa[0][0],seqx);
-            exit(0);
             if (mirror_opt) for (r=0;r<xlen;r++) xa[r][2]=-xa[r][2];
             make_sec(xa, xlen, secx); // secondary structure assignment
 
