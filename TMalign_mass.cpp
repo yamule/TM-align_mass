@@ -886,7 +886,7 @@ int read_PDB(const vector<string> &PDB_lines, double **a, char *seq,
     return i;
 }
 
-int saveByteFile( const string &outfile,int num_residues, double **a, char *seq,
+int saveBinaryFile( const string &outfile,int num_residues, double **a, char *seq,
     vector<string> &resi_vec, const int byresi_opt){
     ofstream fileOut(outfile.c_str(), std::ios::binary| ios::out);
     
@@ -936,7 +936,7 @@ int saveByteFile( const string &outfile,int num_residues, double **a, char *seq,
     }
 }
 
-int loadByteFile( const string &fname_lign, double ***a_, char **seq_,
+int loadBinaryFile( const string &fname_lign, double ***a_, char **seq_,
     vector<string> &resi_vec, const int byresi_opt){
         
     static_assert(4 == sizeof(int));
@@ -955,7 +955,7 @@ int loadByteFile( const string &fname_lign, double ***a_, char **seq_,
         fileIn.read(buff, 4);
 
         int num_records = *((int *) buff);
-        printf("%d****\n",num_records);
+
         double **a = create2DArray<double>(num_records,3);
         char *seq = new char[num_records+1];
 
@@ -5127,12 +5127,12 @@ int main(int argc, char *argv[])
             secx = new char[xlen + 1];
             xlen = read_PDB(PDB_lines1[chain_i], xa, seqx, 
                 resi_vec1, byresi_opt?byresi_opt:o_opt);
-            saveByteFile("../test.dat",xlen,xa, seqx,resi_vec1,byresi_opt?byresi_opt:o_opt);
+            saveBinaryFile("../test.dat",xlen,xa, seqx,resi_vec1,byresi_opt?byresi_opt:o_opt);
             
             delete [] seqx;
             delete2DArray(xa);
             resi_vec1.clear();
-            loadByteFile("../test.dat",&xa, &seqx,resi_vec1,byresi_opt?byresi_opt:o_opt);
+            loadBinaryFile("../test.dat",&xa, &seqx,resi_vec1,byresi_opt?byresi_opt:o_opt);
             printf("%f %s\n",xa[0][0],seqx);
             exit(0);
             if (mirror_opt) for (r=0;r<xlen;r++) xa[r][2]=-xa[r][2];
