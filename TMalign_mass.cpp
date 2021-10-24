@@ -886,6 +886,96 @@ int read_PDB(const vector<string> &PDB_lines, double **a, char *seq,
     return i;
 }
 
+int saveByteFile( const string &outfile,int num_residues, double **a, char *seq,
+    vector<string> &resi_vec, const int byresi_opt){
+    ofstream fileOut(outfile.c_str(), std::ios::binary);
+    fileOut.open(outfile.c_str(), ios::binary | ios::out);
+    
+    static_assert(4 == sizeof(int));
+    static_assert(8 == sizeof(double));
+
+    if (fileIn.is_open() && fileIn.good())
+    {
+        char siz[4];
+        memcpy(&siz[0],&num_residues,sizeof(int));
+        fileOut.write(&siz[0], 4);
+
+        char rs[6*num_residues];
+        for(int ii = 0;ii < num_residues*6;ii++){
+            rs[ii] = 0;
+        }
+
+        int rsiz = resi_vec.size();
+        fileOut.write(&seq[0], num_residues);
+        
+        for(int rr = 0;rr < resi_vec.size();rr++){
+            char c[resi_vec[rr].size() + 1];
+            strcpy(c, resi_vec[rr].c_str());
+            if(byresi_opt >= 2){
+                memcpy(&rs[6*rr],&c[0],6);
+            }else if(byresi_opt == 1){
+                memcpy(&rs[6*rr],&c[0],5);
+            }else{
+                //do nothing
+            }
+        }
+        fileOut.write(&rs[0], num_residues*6);
+        char buff[sizeof(double)*3*num_residues];
+        memcpy(&buff,a[0],sizeof(double)*3*rsiz);
+        fileOut.write(&buff,sizeof(double)*3*rsiz);
+        fileOut.close();
+        return 1;
+    }else{
+
+        printf("Can not open file %s for writing.",outfile);
+        return -1;
+    }
+}
+
+int readByteFile( const string &fname_lign, double **a, char *seq,
+    vector<string> &resi_vec, const int byresi_opt){
+        
+    static_assert(4 == sizeof(int));
+    static_assert(8 == sizeof(double));
+
+    if (fname_lign == "")
+        PrintErrorAndQuit("Please provide a file name for option -i!");
+    // open alignment file
+    int n_p = 0;// number of structures in alignment file
+    string line;
+    
+    ifstream fileIn(fname_lign.c_str(), std::ios::binary);
+    if (fileIn.is_open() && fileIn.good())
+    {
+        char buff[4];
+        fileIn.read(buff, 4);
+
+        int num_records = *((int *) buff);
+        a = create2DArray<double>(num_records,3);
+        seq = new char[num_records+1];
+        int record_size = 1+1*6+8*3;
+        //char, char*6, double*3
+        char contents[num_records*record_size];
+        fileIn.read(contents, num_records*record_size);
+        char resi[num_records*6];
+        memcpy(&seq[0],&contents[0],num_records);
+        memcpy(&resi[0],&contents[0]+num_records,num_records*6);
+        memcpy(a[0],&contents[0]+num_records*7,num_records*8*3);
+        for(int i = 0;i < num_records;i++){
+            if (byresi_opt>=2){
+                std::string strr(&resi[i*6], &resi[i*6] + 6);
+                resi_vec.push_back(strr);
+            }
+            if (byresi_opt ==1){
+                std::string strr(&resi[i*6], &resi[i*6] + 5);
+                resi_vec.push_back(strr);
+            }
+        }
+        seq[num_records]='\0'; 
+        return num_records;
+    }
+    return -1;
+}
 double dist(double x[3], double y[3])
 {
     double d1=x[0]-y[0];
