@@ -5196,6 +5196,7 @@ ToDo
             xchainnum=get_PDB_lines(xname, PDB_lines1, chainID_list1,
                 mol_vec1, ter_opt, infmt1_opt, atom_opt, split_opt, het_opt);
         }else{
+            chainID_list1.push_back("*");
             mol_vec1.push_back(0);
             xchainnum = 1;
         }
@@ -5253,6 +5254,7 @@ ToDo
                             het_opt);
                     }else{
                         mol_vec2.push_back(0);
+                        chainID_list2.push_back("*");
                         ychainnum = 1;
                     }
                     if (!ychainnum)
@@ -5365,30 +5367,38 @@ ToDo
                 if (chain2_list.size()>1)
                 {
                     yname.clear();
-                    for (chain_j=0;chain_j<ychainnum;chain_j++)
-                        PDB_lines2[chain_j].clear();
-                    PDB_lines2.clear();
+                    if(infmt2_opt != INFORMAT_BINARY){
+                        for (chain_j=0;chain_j<ychainnum;chain_j++)
+                            PDB_lines2[chain_j].clear();
+                        PDB_lines2.clear();
+                    }
                     chainID_list2.clear();
                     mol_vec2.clear();
                 }
             } // j
-            PDB_lines1[chain_i].clear();
+            if(infmt2_opt != INFORMAT_BINARY){
+                PDB_lines1[chain_i].clear();
+            }
             delete2DArray(xa);
             delete [] seqx;
             delete [] secx;
             resi_vec1.clear();
         } // chain_i
         xname.clear();
-        PDB_lines1.clear();
+        if(infmt2_opt != INFORMAT_BINARY){
+            PDB_lines1.clear();
+        }
         chainID_list1.clear();
         mol_vec1.clear();
     } // i
     if (chain2_list.size()==1)
     {
         yname.clear();
-        for (chain_j=0;chain_j<ychainnum;chain_j++)
-            PDB_lines2[chain_j].clear();
-        PDB_lines2.clear();
+        if(infmt2_opt != INFORMAT_BINARY){
+            for (chain_j=0;chain_j<ychainnum;chain_j++)
+                PDB_lines2[chain_j].clear();
+            PDB_lines2.clear();
+        }
         resi_vec2.clear();
         chainID_list2.clear();
         mol_vec2.clear();
