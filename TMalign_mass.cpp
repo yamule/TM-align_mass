@@ -172,6 +172,13 @@ void print_extra_help()
     <<endl;
 }
 
+#define INFORMAT_PDBAUTO -1
+#define INFORMAT_PDB 0
+#define INFORMAT_SPICKER 1
+#define INFORMAT_XYZ 2
+#define INFORMAT_MMCIF 3
+#define INFORMAT_BINARY 9
+
 void print_help(bool h_opt=false)
 {
     print_version();
@@ -422,7 +429,7 @@ size_t get_PDB_lines(const string filename,
     ifstream fin;
     fin.open(filename.c_str());
 
-    if (infmt_opt==0||infmt_opt==-1) // PDB format
+    if (infmt_opt==INFORMAT_PDB||infmt_opt==INFORMAT_PDBAUTO) // PDB format
     {
         while (fin.good())
         {
@@ -506,7 +513,7 @@ size_t get_PDB_lines(const string filename,
             }
         }
     }
-    else if (infmt_opt==1) // SPICKER format
+    else if (infmt_opt==INFORMAT_SPICKER) // SPICKER format
     {
         int L=0;
         float x,y,z;
@@ -535,7 +542,7 @@ size_t get_PDB_lines(const string filename,
             getline(fin, line);
         }
     }
-    else if (infmt_opt==2) // xyz format
+    else if (infmt_opt==INFORMAT_XYZ) // xyz format
     {
         int L=0;
         char A;
@@ -565,7 +572,7 @@ size_t get_PDB_lines(const string filename,
             }
         }
     }
-    else if (infmt_opt==3) // PDBx/mmCIF format
+    else if (infmt_opt==INFORMAT_MMCIF) // PDBx/mmCIF format
     {
         bool loop_ = false; // not reading following content
         map<string,int> _atom_site;
@@ -985,9 +992,7 @@ int loadBinaryFile( const string &fname_lign,char **exdata_, double ***a_, char 
         memcpy(&seq[0],&contents[0],num_records);
         memcpy(&resi[0],&contents[0]+num_records,num_records*6);
         memcpy(a[0],&contents[0]+num_records*7,num_records*8*3);
-        for(int jj = 0;jj < 100;jj++){
-            printf("%d %f\n",jj,a[jj][0]);
-        }
+        
         for(int i = 0;i < num_records;i++){
             if (byresi_opt>=2){
                 std::string strr(&resi[i*6], &resi[i*6] + 6);
@@ -5006,6 +5011,10 @@ int main(int argc, char *argv[])
         {
             binout=argv[i+1]; i++;
         }
+        else if ( !strcmp(argv[i],"-bin_file") && i < (argc-1) )
+        {
+            binout=argv[i+1]; i++;
+        }
         else if (xname.size() == 0) xname=argv[i];
         else if (yname.size() == 0) yname=argv[i];
         else PrintErrorAndQuit(string("ERROR! Undefined option ")+argv[i]);
@@ -5115,12 +5124,24 @@ int main(int argc, char *argv[])
     vector<string> resi_vec1;  // residue index for chain1
     vector<string> resi_vec2;  // residue index for chain2
 
+/*
+ToDo
+・ローダーから読みだして表示
+・ローダーから読みだして処理
+・他のオプションがあったらエラー出す
+・複数 Chain について考える
+*/
     if(binout.size() > 0){
+        //convert to binary format.
         for (i=0;i<chain1_list.size();i++){
             /* parse chain 1 */
             xname=chain1_list[i];
-            xchainnum=get_PDB_lines(xname, PDB_lines1, chainID_list1,
-                mol_vec1, ter_opt, infmt1_opt, atom_opt, split_opt, het_opt);
+            if(infmt1_opt != INFORMAT_BINARY){
+                xchainnum=get_PDB_lines(xname, PDB_lines1, chainID_list1,
+                    mol_vec1, ter_opt, infmt1_opt, atom_opt, split_opt, het_opt);
+            }else{
+                xchainnum = 1;
+            }
             if (!xchainnum)
             {
                 cerr<<"Warning! Cannot parse file: "<<xname
@@ -5171,8 +5192,13 @@ int main(int argc, char *argv[])
     {
         /* parse chain 1 */
         xname=chain1_list[i];
-        xchainnum=get_PDB_lines(xname, PDB_lines1, chainID_list1,
-            mol_vec1, ter_opt, infmt1_opt, atom_opt, split_opt, het_opt);
+        if(infmt1_opt != INFORMAT_BINARY){
+            xchainnum=get_PDB_lines(xname, PDB_lines1, chainID_list1,
+                mol_vec1, ter_opt, infmt1_opt, atom_opt, split_opt, het_opt);
+        }else{
+            mol_vec1.push_back(0);
+            xchainnum = 1;
+        }
         if (!xchainnum)
         {
             cerr<<"Warning! Cannot parse file: "<<xname
@@ -5181,7 +5207,16 @@ int main(int argc, char *argv[])
         }
         for (chain_i=0;chain_i<xchainnum;chain_i++)
         {
-            xlen=PDB_lines1[chain_i].size();
+            double **xa;
+            if(infmt1_opt == INFORMAT_BINARY){
+                char *exdata;
+                xlen = loadBinaryFile(chain1_list[i], &exdata, &xa, &seqx,
+                    resi_vec1, byresi_opt?byresi_opt:o_opt   
+                );
+                delete[] exdata;
+            }else{
+                xlen=PDB_lines1[chain_i].size();
+            }
             mol_vec1[chain_i]=-1;
             if (!xlen)
             {
@@ -5194,11 +5229,13 @@ int main(int argc, char *argv[])
                 cerr<<"Sequence is too short <3!: "<<xname<<endl;
                 continue;
             }
-            double **xa = create2DArray<double>(xlen, 3);
-            seqx = new char[xlen + 1];
             secx = new char[xlen + 1];
-            xlen = read_PDB(PDB_lines1[chain_i], xa, seqx, 
-                resi_vec1, byresi_opt?byresi_opt:o_opt);
+            if(infmt1_opt != INFORMAT_BINARY){
+                xa = create2DArray<double>(xlen, 3);
+                seqx = new char[xlen + 1];
+                xlen = read_PDB(PDB_lines1[chain_i], xa, seqx, 
+                    resi_vec1, byresi_opt?byresi_opt:o_opt);
+            }
             
             if (mirror_opt) for (r=0;r<xlen;r++) xa[r][2]=-xa[r][2];
             make_sec(xa, xlen, secx); // secondary structure assignment
@@ -5209,9 +5246,15 @@ int main(int argc, char *argv[])
                 if (PDB_lines2.size()==0)
                 {
                     yname=chain2_list[j];
-                    ychainnum=get_PDB_lines(yname, PDB_lines2, chainID_list2,
-                        mol_vec2, ter_opt, infmt2_opt, atom_opt, split_opt,
-                        het_opt);
+                    
+                    if(infmt2_opt != INFORMAT_BINARY){
+                        ychainnum=get_PDB_lines(yname, PDB_lines2, chainID_list2,
+                            mol_vec2, ter_opt, infmt2_opt, atom_opt, split_opt,
+                            het_opt);
+                    }else{
+                        mol_vec2.push_back(0);
+                        ychainnum = 1;
+                    }
                     if (!ychainnum)
                     {
                         cerr<<"Warning! Cannot parse file: "<<yname
@@ -5221,7 +5264,17 @@ int main(int argc, char *argv[])
                 }
                 for (chain_j=0;chain_j<ychainnum;chain_j++)
                 {
-                    ylen=PDB_lines2[chain_j].size();
+                    double **ya;
+                    if(infmt2_opt == INFORMAT_BINARY){
+                        char *exdata;
+                        ylen = loadBinaryFile(chain2_list[j], &exdata, &ya, &seqy,
+                            resi_vec2, byresi_opt?byresi_opt:o_opt   
+                        );
+                        delete[] exdata;
+                    }else{                    
+                        ylen=PDB_lines2[chain_j].size();
+                    }
+
                     mol_vec2[chain_j]=-1;
                     if (!ylen)
                     {
@@ -5234,11 +5287,14 @@ int main(int argc, char *argv[])
                         cerr<<"Sequence is too short <3!: "<<yname<<endl;
                         continue;
                     }
-                    double **ya = create2DArray<double>(ylen, 3);
-                    seqy = new char[ylen + 1];
                     secy = new char[ylen + 1];
-                    ylen = read_PDB(PDB_lines2[chain_j], ya, seqy,
-                        resi_vec2, byresi_opt?byresi_opt:o_opt);
+                    if(infmt2_opt != INFORMAT_BINARY){
+                        ya = create2DArray<double>(ylen, 3);
+                        seqy = new char[ylen + 1];
+                        ylen = read_PDB(PDB_lines2[chain_j], ya, seqy,
+                            resi_vec2, byresi_opt?byresi_opt:o_opt);
+                            
+                    }
                     make_sec(ya, ylen, secy);
                     if (byresi_opt) extract_aln_from_resi(sequence,
                         seqx,seqy,resi_vec1,resi_vec2,byresi_opt);
