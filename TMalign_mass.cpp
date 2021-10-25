@@ -893,9 +893,10 @@ int read_PDB(const vector<string> &PDB_lines, double **a, char *seq,
     return i;
 }
 
-int saveBinaryFile( const string &outfile,int extra_data_size,char *exdata,int num_residues
-, double **a, char *seq,
-    vector<string> &resi_vec, const int byresi_opt){
+int saveBinaryFile( const string &outfile, const int extra_data_size, const char *exdata
+    , const int mol_type , const string &chain_name
+    , const int num_residues, double **a, const char *seq
+    ,const vector<string> &resi_vec, const int byresi_opt){
     ofstream fileOut(outfile.c_str(), std::ios::binary| ios::out);
     
     static_assert(4 == sizeof(int));
@@ -909,6 +910,19 @@ int saveBinaryFile( const string &outfile,int extra_data_size,char *exdata,int n
         if(extra_data_size > 0){
             fileOut.write(&exdata[0], extra_data_size);
         }
+
+        char typ[4];
+        memcpy(&typ[0],&mol_type,sizeof(int));
+        fileOut.write(&typ[0], 4);
+
+        char cname[10] = {'\0','\0','\0','\0','\0','\0','\0','\0','\0','\0'};
+        if(chain_name.size() <= 10){
+            memcpy(cname, chain_name.c_str(),chain_name.size());
+        }else{
+            printf("The length of the chain name must be less than 11.\nThe name was truncated.\n");
+            memcpy(cname, chain_name.c_str(),10);
+        }
+        fileOut.write(&cname[0],10);
 
         char siz[4];
         memcpy(&siz[0],&num_residues,sizeof(int));
@@ -951,7 +965,7 @@ int saveBinaryFile( const string &outfile,int extra_data_size,char *exdata,int n
     }
 }
 
-int loadBinaryFile( const string &fname_lign,char **exdata_, double ***a_, char **seq_,
+int loadBinaryFile( const string &fname_lign,char **exdata_,int *mol_type_, char **chain_name_, double ***a_, char **seq_,
     vector<string> &resi_vec, const int byresi_opt){
         
     static_assert(4 == sizeof(int));
@@ -975,10 +989,17 @@ int loadBinaryFile( const string &fname_lign,char **exdata_, double ***a_, char 
             fileIn.read(exdata, extra_data_size);
             *exdata_ = exdata;
         }
+        
+        fileIn.read(buff, 4);
+        int mol_type = *((int *) buff);
+        
+        char* chain_name = new char[11];
+        fileIn.read(chain_name, 10);
+        chain_name[10] = '\0';
 
         fileIn.read(buff, 4);
         int num_records = *((int *) buff);
-
+        
         double **a = create2DArray<double>(num_records,3);
         char *seq = new char[num_records+1];
 
@@ -1006,6 +1027,8 @@ int loadBinaryFile( const string &fname_lign,char **exdata_, double ***a_, char 
         seq[num_records]='\0';
         *a_ = a;
         *seq_ = seq;
+        *mol_type_ = mol_type;
+        *chain_name_ = chain_name;
         return num_records;
     }
     return -1;
@@ -5126,8 +5149,6 @@ int main(int argc, char *argv[])
 
 /*
 ToDo
-・ローダーから読みだして表示
-・ローダーから読みだして処理
 ・他のオプションがあったらエラー出す
 ・複数 Chain について考える
 */
@@ -5177,13 +5198,25 @@ ToDo
                     outname += "."+ std::to_string(chain_i);
                 }
                 saveBinaryFile(
-                outname,5,exdata
-                ,xlen, xa, seqx,resi_vec1
-                ,byresi_opt?byresi_opt:o_opt);
-                delete[] seqx;
-                delete[] exdata;
+                outname, 5, exdata
+                , mol_vec1[i], chainID_list1[i]
+                , xlen, xa, seqx, resi_vec1
+                , byresi_opt?byresi_opt:o_opt);
+                
+                if(infmt1_opt != INFORMAT_BINARY){
+                    PDB_lines1[chain_i].clear();
+                }
                 delete2DArray(xa);
+                delete [] seqx;
+                delete [] secx;
+                resi_vec1.clear();
             }
+            xname.clear();
+            if(infmt1_opt != INFORMAT_BINARY){
+                PDB_lines1.clear();
+            }
+            chainID_list1.clear();
+            mol_vec1.clear();
         }
         exit(0);
     }
@@ -5196,8 +5229,6 @@ ToDo
             xchainnum=get_PDB_lines(xname, PDB_lines1, chainID_list1,
                 mol_vec1, ter_opt, infmt1_opt, atom_opt, split_opt, het_opt);
         }else{
-            chainID_list1.push_back("*");
-            mol_vec1.push_back(0);
             xchainnum = 1;
         }
         if (!xchainnum)
@@ -5211,10 +5242,15 @@ ToDo
             double **xa;
             if(infmt1_opt == INFORMAT_BINARY){
                 char *exdata;
-                xlen = loadBinaryFile(chain1_list[i], &exdata, &xa, &seqx,
+                int moltype;
+                char *chainname;
+                xlen = loadBinaryFile(chain1_list[i], &exdata, &moltype, &chainname, &xa, &seqx,
                     resi_vec1, byresi_opt?byresi_opt:o_opt   
                 );
+                chainID_list1.push_back(std::string(chainname));
+                mol_vec1.push_back(moltype);
                 delete[] exdata;
+                delete[] chainname;
             }else{
                 xlen=PDB_lines1[chain_i].size();
             }
@@ -5253,8 +5289,6 @@ ToDo
                             mol_vec2, ter_opt, infmt2_opt, atom_opt, split_opt,
                             het_opt);
                     }else{
-                        mol_vec2.push_back(0);
-                        chainID_list2.push_back("*");
                         ychainnum = 1;
                     }
                     if (!ychainnum)
@@ -5269,10 +5303,15 @@ ToDo
                     double **ya;
                     if(infmt2_opt == INFORMAT_BINARY){
                         char *exdata;
-                        ylen = loadBinaryFile(chain2_list[j], &exdata, &ya, &seqy,
+                        int moltype;
+                        char *chainname;
+                        ylen = loadBinaryFile(chain2_list[j], &exdata, &moltype, &chainname, &ya, &seqy,
                             resi_vec2, byresi_opt?byresi_opt:o_opt   
                         );
+                        chainID_list2.push_back(std::string(chainname));
+                        mol_vec2.push_back(moltype);
                         delete[] exdata;
+                        delete[] chainname;
                     }else{                    
                         ylen=PDB_lines2[chain_j].size();
                     }
@@ -5376,7 +5415,7 @@ ToDo
                     mol_vec2.clear();
                 }
             } // j
-            if(infmt2_opt != INFORMAT_BINARY){
+            if(infmt1_opt != INFORMAT_BINARY){
                 PDB_lines1[chain_i].clear();
             }
             delete2DArray(xa);
@@ -5385,7 +5424,7 @@ ToDo
             resi_vec1.clear();
         } // chain_i
         xname.clear();
-        if(infmt2_opt != INFORMAT_BINARY){
+        if(infmt1_opt != INFORMAT_BINARY){
             PDB_lines1.clear();
         }
         chainID_list1.clear();
