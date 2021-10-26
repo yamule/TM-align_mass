@@ -21,6 +21,15 @@ cd ..
 bin/TMalign_mass.exe UP000000625_83333_ECOLI/AF-P36677-F1-model_v1.pdb -dir2 UP000000625_83333_ECOLI/ UP000000625_83333_ECOLI/pdblist.dat
 ```
 
+
+## Perform Multi-processing:
+```
+find UP000000625_83333_ECOLI | grep -E "\.pdb$" | xargs -I {} bin/TMalign_mass.exe {} -bin_convert {}.bxyz 
+ls UP000000625_83333_ECOLI | grep -E "\.pdb.bxyz$"  > UP000000625_83333_ECOLI/pdblist_binary.dat
+perl scripts/multi_process.pl
+```
+
+
 ## References to cite:
 Y Zhang, J Skolnick. Nucl Acids Res 33, 2302-9 (2005)
 
