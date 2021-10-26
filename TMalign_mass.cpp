@@ -1598,22 +1598,18 @@ inline void NWDP_TM_B(bool **path, double **val, double **x, double **y,
         j2i[j]=-1;    //all are not aligned, only use j2i[1:len2]
     }      
     double xx[3];
-    //decide matrix and path
-    for(i=1; i<=len1; i++)
-    {
+    for(i=1; i<=len1; i++){
         transform(t, u, &x[i-1][0], xx);
         for(j=1; j<=len2; j++)
         {
 
             d=val[i-1][j-1] +  1.0/(1+dist(xx, &y[j-1][0])/d02);
-
+            
             //symbol insertion in horizontal (= a gap in vertical)
-            h=val[i-1][j];
-            if(path[i-1][j]) h += gap_open; //aligned in last position
+            h=val[i-1][j]+((path[i-1][j])?(gap_open):(0.0)); //aligned in last position
 
             //symbol insertion in vertical
-            v=val[i][j-1];
-            if(path[i][j-1]) v += gap_open; //aligned in last position
+            v=val[i][j-1]+((path[i][j-1])?(gap_open):(0.0)); //aligned in last position
 
 
             if(d>=h && d>=v)
@@ -1630,6 +1626,7 @@ inline void NWDP_TM_B(bool **path, double **val, double **x, double **y,
         } //for i
     } //for j
 
+
     //trace back to extract the alignment
     i=len1;
     j=len2;
@@ -1640,17 +1637,15 @@ inline void NWDP_TM_B(bool **path, double **val, double **x, double **y,
             j2i[j-1]=i-1;
             i--;
             j--;
-        }
-        else 
-        {
-            h=val[i-1][j];
-            if(path[i-1][j]) h +=gap_open;
-
-            v=val[i][j-1];
-            if(path[i][j-1]) v +=gap_open;
-
-            if(v>=h) j--;
-            else i--;
+        }else{
+            if(val[i][j-1]+((path[i][j-1])?(gap_open):(0.0)) >=
+             val[i-1][j]+((path[i-1][j])?(gap_open):(0.0))){
+                //vertical
+                j--;
+            }else{
+                //horizontal
+                i--;
+            };
         }
     }
 }
