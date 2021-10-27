@@ -169,6 +169,7 @@ void print_extra_help()
 "             1: SPICKER format\n"
 "             2: xyz format\n"
 "             3: PDBx/mmCIF format\n"
+"             9: Binary XYZ format (produced by -bin_convert)\n"
     <<endl;
 }
 
@@ -904,6 +905,9 @@ int saveBinaryFile( const string &outfile, const int extra_data_size, const char
 
     if (fileOut.is_open() && fileOut.good())
     {
+        char head[6] = {'B','X','Y','Z','V','1'};
+        fileOut.write(&head[0], 6);
+        
         char exdd[4];
         memcpy(&exdd[0],&extra_data_size,sizeof(int));
         fileOut.write(&exdd[0], 4);
@@ -915,14 +919,15 @@ int saveBinaryFile( const string &outfile, const int extra_data_size, const char
         memcpy(&typ[0],&mol_type,sizeof(int));
         fileOut.write(&typ[0], 4);
 
-        char cname[10] = {'\0','\0','\0','\0','\0','\0','\0','\0','\0','\0'};
-        if(chain_name.size() <= 10){
+        char cname[20] = {'\0','\0','\0','\0','\0','\0','\0','\0','\0','\0',
+                        '\0','\0','\0','\0','\0','\0','\0','\0','\0','\0'};
+        if(chain_name.size() <= 20){
             memcpy(cname, chain_name.c_str(),chain_name.size());
         }else{
-            printf("The length of the chain name must be less than 11.\nThe name was truncated.\n");
-            memcpy(cname, chain_name.c_str(),10);
+            printf("The length of the chain name must be less than 21.\nThe name was truncated.\n");
+            memcpy(cname, chain_name.c_str(),20);
         }
-        fileOut.write(&cname[0],10);
+        fileOut.write(&cname[0],20);
 
         char siz[4];
         memcpy(&siz[0],&num_residues,sizeof(int));
@@ -980,6 +985,12 @@ int loadBinaryFile( const string &fname_lign,char **exdata_,int *mol_type_, char
     ifstream fileIn(fname_lign.c_str(), std::ios::binary);
     if (fileIn.is_open() && fileIn.good())
     {
+        char head[6];
+        fileIn.read(head, 6);        
+        char headchk[6] = {'B','X','Y','Z','V','1'};
+        if(!equal(&head[0],&head[0]+6,&headchk[0])){
+            PrintErrorAndQuit("ERROR! Wrong header!");
+        }
         char buff[4];
         fileIn.read(buff, 4);        
         int extra_data_size = *((int *) buff);
@@ -993,9 +1004,9 @@ int loadBinaryFile( const string &fname_lign,char **exdata_,int *mol_type_, char
         fileIn.read(buff, 4);
         int mol_type = *((int *) buff);
         
-        char* chain_name = new char[11];
-        fileIn.read(chain_name, 10);
-        chain_name[10] = '\0';
+        char* chain_name = new char[21];
+        fileIn.read(chain_name, 20);
+        chain_name[20] = '\0';
 
         fileIn.read(buff, 4);
         int num_records = *((int *) buff);
@@ -4887,8 +4898,8 @@ int main(int argc, char *argv[])
     bool d_opt = false; // flag for -d, user specified d0
 
     double TMcut     =-1;
-    int    infmt1_opt=-1;    // PDB or PDBx/mmCIF format for chain_1
-    int    infmt2_opt=-1;    // PDB or PDBx/mmCIF format for chain_2
+    int    infmt1_opt_orig=-1;    // PDB or PDBx/mmCIF format for chain_1
+    int    infmt2_opt_orig=-1;    // PDB or PDBx/mmCIF format for chain_2
     int    ter_opt   =3;     // TER, END, or different chainID
     int    split_opt =0;     // do not split chain
     int    outfmt_opt=0;     // set -outfmt to full output
@@ -4963,11 +4974,11 @@ int main(int argc, char *argv[])
         }
         else if ( !strcmp(argv[i],"-infmt1") && i < (argc-1) )
         {
-            infmt1_opt=atoi(argv[i + 1]); i++;
+            infmt1_opt_orig=atoi(argv[i + 1]); i++;
         }
         else if ( !strcmp(argv[i],"-infmt2") && i < (argc-1) )
         {
-            infmt2_opt=atoi(argv[i + 1]); i++;
+            infmt2_opt_orig=atoi(argv[i + 1]); i++;
         }
         else if ( !strcmp(argv[i],"-ter") && i < (argc-1) )
         {
@@ -5147,11 +5158,24 @@ ToDo
 ・他のオプションがあったらエラー出す
 ・複数 Chain について考える
 */
+    int infmt1_opt = infmt1_opt_orig;
+    int infmt2_opt = infmt2_opt_orig;
     if(binout.size() > 0){
         //convert to binary format.
         for (i=0;i<chain1_list.size();i++){
             /* parse chain 1 */
             xname=chain1_list[i];
+            infmt1_opt = infmt1_opt_orig;
+            if(infmt1_opt == INFORMAT_PDBAUTO){
+                int xsiz = xname.size();
+                if(xsiz >= 4){
+                    const char *xc = xname.c_str();
+                    if(xc[xsiz-4] == 'b' && xc[xsiz-3] == 'x' && xc[xsiz-2] == 'y' && xc[xsiz-1] == 'z'){
+                        infmt1_opt = INFORMAT_BINARY;
+                    }
+                }
+            }
+
             if(infmt1_opt != INFORMAT_BINARY){
                 xchainnum=get_PDB_lines(xname, PDB_lines1, chainID_list1,
                     mol_vec1, ter_opt, infmt1_opt, atom_opt, split_opt, het_opt);
@@ -5279,6 +5303,17 @@ ToDo
                 {
                     yname=chain2_list[j];
                     
+                    infmt2_opt = infmt2_opt_orig;
+                    if(infmt2_opt == INFORMAT_PDBAUTO){
+                        int xsiz = yname.size();
+                        if(xsiz >= 4){
+                            const char *yc = yname.c_str();
+                            if(yc[xsiz-4] == 'b' && yc[xsiz-3] == 'x' && yc[xsiz-2] == 'y' && yc[xsiz-1] == 'z'){
+                                infmt2_opt = INFORMAT_BINARY;
+                            }
+                        }
+                    }
+
                     if(infmt2_opt != INFORMAT_BINARY){
                         ychainnum=get_PDB_lines(yname, PDB_lines2, chainID_list2,
                             mol_vec2, ter_opt, infmt2_opt, atom_opt, split_opt,
