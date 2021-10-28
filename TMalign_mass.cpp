@@ -5161,6 +5161,12 @@ ToDo
     int infmt1_opt = infmt1_opt_orig;
     int infmt2_opt = infmt2_opt_orig;
     if(binout.size() > 0){
+
+        if(binout.size() > 5){
+            if(binout.substr(binout.size()-5).compare(".bxyz") == 0){
+                binout = binout.substr(0,binout.size()-5);
+            }
+        }
         //convert to binary format.
         for (i=0;i<chain1_list.size();i++){
             /* parse chain 1 */
@@ -5213,8 +5219,9 @@ ToDo
                 exdata[3] ='M';
                 exdata[4] ='Y';
                 std::string outname = binout;
+
                 if(xchainnum > 1){
-                    outname += "."+ std::to_string(chain_i);
+                    outname += "."+ std::to_string(chain_i)+".bxyz";
                 }
                 saveBinaryFile(
                 outname, 5, exdata
