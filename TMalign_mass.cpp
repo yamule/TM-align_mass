@@ -1,3 +1,8 @@
+/*
+ * TM-align for large dbs.
+ * https://github.com/yamule/TM-align_mass/
+ * I tried several optimization tequniques but I could speed up only 8% or so...(yamule)
+*/
 /* TM-align: sequence-independent structure alignment of monomer proteins by
  * TM-score superposition. Please report issues to yangzhanglab@umich.edu
  * 
@@ -63,6 +68,7 @@
  * 2019/08/22: Added four additional PyMOL scripts.
  * 2020/12/12: Fixed bug in double precision coordinate cif file alignment.
  * 2021/02/24: Fixed file format issue for new incentive PyMOL.
+ * 2021/10/28: (yamule) created TM-align_mass
  */
 #include <math.h>
 #include <stdio.h>
@@ -2877,7 +2883,7 @@ void find_max_frag(double **x, int len, int *start_max,
     if(r_min > fra_min) r_min=fra_min;
     
     int inc=0;
-    double dcu0_cut=dcu0*dcu0;;
+    double dcu0_cut=dcu0*dcu0;
     double dcu_cut=dcu0_cut;
 
     while(Lfr_max < r_min)
