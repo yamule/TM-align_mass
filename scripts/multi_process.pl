@@ -2,16 +2,26 @@ use strict;
 use warnings;
 
 use File::Temp qw/ tempfile tempdir /;
+use Getopt::Long qw(GetOptions);
+
+
+use File::Basename;
+my $dirname = dirname(__FILE__);
+
 my $tempdirr = tempdir( CLEANUP => 1 );
 my $num_cpu = 8;
 #print $tempdirr;
 
-my $chain1 = "UP000000625_83333_ECOLI/AF-P36677-F1-model_v1.pdb";
-my $dir2 = "UP000000625_83333_ECOLI/";
-my $filelist = "UP000000625_83333_ECOLI/pdblist_b.dat";
+my $chain1;
+my $dir2;
+my $filelist;
 
-my $tmalign_exe = "bin/TMalign_mass.exe";
-my $tmalign_options = " -infmt2 9 ";
+my $helpmessage = "Usage: $0 --query query_pdb_file --dir root_dir_for_subject_files --list subject_file_name_list [--num_threads number_of_threads] \n";
+GetOptions('query=s' => \$chain1,'dir=s' => \$dir2, 'list=s' => \$filelist, 'num_threads:i' => \$num_cpu) or die $helpmessage;
+
+
+my $tmalign_exe = $dirname."/../bin/TMalign_mass.exe ";
+my $tmalign_options = " ";
 
 my @tempfiles;
 my @temphandle;
@@ -24,7 +34,7 @@ for(my $cc = 0;$cc < $num_cpu;$cc++){
 }
 
 my $cou = 0;
-open(IN,$filelist);
+open(IN,$filelist) or die "Can not open $filelist.";
 while(my $ss = <IN>){
 	my $fh = $temphandle[$cou%$num_cpu];
 	print $fh $ss;
