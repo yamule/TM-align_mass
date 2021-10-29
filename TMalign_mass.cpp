@@ -4888,7 +4888,7 @@ int main(int argc, char *argv[])
     /**********************/
     string xname       = "";
     string yname       = "";
-    string binout       = "";
+    string binout_base       = "";
     string fname_super = ""; // file name for superposed structure
     string fname_lign  = ""; // file name for user alignment
     string fname_matrix= ""; // file name for output matrix
@@ -5045,18 +5045,14 @@ int main(int argc, char *argv[])
         }
         else if ( !strcmp(argv[i],"-bin_convert") && i < (argc-1) )
         {
-            binout=argv[i+1]; i++;
-        }
-        else if ( !strcmp(argv[i],"-bin_file") && i < (argc-1) )
-        {
-            binout=argv[i+1]; i++;
+            binout_base=argv[i+1]; i++;
         }
         else if (xname.size() == 0) xname=argv[i];
         else if (yname.size() == 0) yname=argv[i];
         else PrintErrorAndQuit(string("ERROR! Undefined option ")+argv[i]);
     }
 
-    if(xname.size()==0 || binout.size() == 0 && ((yname.size()==0 && dir_opt.size()==0) || 
+    if(xname.size()==0 || binout_base.size() == 0 && ((yname.size()==0 && dir_opt.size()==0) || 
                           (yname.size()    && dir_opt.size())))
     {
         if (h_opt) print_help(h_opt);
@@ -5167,11 +5163,11 @@ ToDo
 */
     int infmt1_opt = infmt1_opt_orig;
     int infmt2_opt = infmt2_opt_orig;
-    if(binout.size() > 0){
+    if(binout_base.size() > 0){
 
-        if(binout.size() > 5){
-            if(binout.substr(binout.size()-5).compare(".bxyz") == 0){
-                binout = binout.substr(0,binout.size()-5);
+        if(binout_base.size() > 5){
+            if(binout_base.substr(binout_base.size()-5).compare(".bxyz") == 0){
+                binout_base = binout_base.substr(0,binout_base.size()-5);
             }
         }
         //convert to binary format.
@@ -5225,10 +5221,12 @@ ToDo
                 exdata[2] ='M';
                 exdata[3] ='M';
                 exdata[4] ='Y';
-                std::string outname = binout;
+                std::string outname = binout_base;
 
                 if(xchainnum > 1){
                     outname += "."+ std::to_string(chain_i)+".bxyz";
+                }else{
+                    outname += ".bxyz";
                 }
                 saveBinaryFile(
                 outname, 5, exdata
