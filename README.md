@@ -32,7 +32,9 @@ perl scripts/multi_process.pl --query UP000000625_83333_ECOLI/AF-P36677-F1-model
 
 
 ## References to cite:
+ - TM-align
 Y Zhang, J Skolnick. Nucl Acids Res 33, 2302-9 (2005)
+https://academic.oup.com/nar/article/33/7/2302/2401364
 
 
 ## License:
