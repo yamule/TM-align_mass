@@ -1,6 +1,13 @@
 # TM-align_mass
 TM-align for large dbs.
 
+## Main differences with the original TM-align:
+ - Check one more previous step in TMscore8_search function.
+ - Force one of the NWDP_TM function to be inline.
+ - Added binary file mode.
+
+Anyway, I expect that result is completely the same with the original TM-align.
+
 ## Compile:
 ```
 clone https://github.com/yamule/TM-align_mass.git

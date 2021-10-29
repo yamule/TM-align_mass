@@ -5257,7 +5257,19 @@ ToDo
     for (i=0;i<chain1_list.size();i++)
     {
         /* parse chain 1 */
+        
         xname=chain1_list[i];
+        infmt1_opt = infmt1_opt_orig;
+        if(infmt1_opt == INFORMAT_PDBAUTO){
+            int xsiz = xname.size();
+            if(xsiz >= 4){
+                const char *xc = xname.c_str();
+                if(xc[xsiz-4] == 'b' && xc[xsiz-3] == 'x' && xc[xsiz-2] == 'y' && xc[xsiz-1] == 'z'){
+                    infmt1_opt = INFORMAT_BINARY;
+                }
+            }
+        }
+        
         if(infmt1_opt != INFORMAT_BINARY){
             xchainnum=get_PDB_lines(xname, PDB_lines1, chainID_list1,
                 mol_vec1, ter_opt, infmt1_opt, atom_opt, split_opt, het_opt);
