@@ -1,8 +1,3 @@
-/*
- * TM-align for large dbs.
- * https://github.com/yamule/TM-align_mass/
- * I tried several optimization tequniques but I could speed up only 8% or so...(yamule)
-*/
 /* TM-align: sequence-independent structure alignment of monomer proteins by
  * TM-score superposition. Please report issues to yangzhanglab@umich.edu
  * 
@@ -68,7 +63,6 @@
  * 2019/08/22: Added four additional PyMOL scripts.
  * 2020/12/12: Fixed bug in double precision coordinate cif file alignment.
  * 2021/02/24: Fixed file format issue for new incentive PyMOL.
- * 2021/10/28: (yamule) created TM-align_mass
  */
 #include <math.h>
 #include <stdio.h>
@@ -175,16 +169,8 @@ void print_extra_help()
 "             1: SPICKER format\n"
 "             2: xyz format\n"
 "             3: PDBx/mmCIF format\n"
-"             9: Binary XYZ format (produced by -bin_convert)\n"
     <<endl;
 }
-
-#define INFORMAT_PDBAUTO -1
-#define INFORMAT_PDB 0
-#define INFORMAT_SPICKER 1
-#define INFORMAT_XYZ 2
-#define INFORMAT_MMCIF 3
-#define INFORMAT_BINARY 9
 
 void print_help(bool h_opt=false)
 {
@@ -266,42 +252,18 @@ template <typename T> inline T getmin(const T &a, const T &b)
     return b<a?b:a;
 }
 
-//from https://stackoverflow.com/questions/21943621/how-to-create-a-contiguous-2d-array-in-c
-//PaulMcKenzie 's post
-template <typename T>
-T** create2DArray(unsigned nrows, unsigned ncols, const T& val = T())
+template <class A> void NewArray(A *** array, int Narray1, int Narray2)
 {
-   if (nrows == 0)
-        throw std::invalid_argument("number of rows is 0");
-   if (ncols == 0)
-        throw std::invalid_argument("number of columns is 0");
-   T** ptr = nullptr;
-   T* pool = nullptr;
-   try
-   {
-       ptr = new T*[nrows];  // allocate pointers (can throw here)
-       pool = new T[nrows*ncols]{val};  // allocate pool (can throw here)
-
-       // now point the row pointers to the appropriate positions in
-       // the memory pool
-       for (unsigned i = 0; i < nrows; ++i, pool += ncols )
-           ptr[i] = pool;
-
-       // Done.
-       return ptr;
-   }
-   catch (std::bad_alloc& ex)
-   {
-       delete [] ptr; // either this is nullptr or it was allocated
-       throw ex;  // memory allocation error
-   }
+    *array=new A* [Narray1];
+    for(int i=0; i<Narray1; i++) *(*array+i)=new A [Narray2];
 }
 
-template <typename T>
-void delete2DArray(T** arr)
+template <class A> void DeleteArray(A *** array, int Narray)
 {
-   delete [] arr[0];  // remove the pool
-   delete [] arr;     // remove the pointers
+    for(int i=0; i<Narray; i++)
+        if(*(*array+i)) delete [] *(*array+i);
+    if(Narray) delete [] (*array);
+    (*array)=NULL;
 }
 
 string AAmap(char A)
@@ -436,7 +398,7 @@ size_t get_PDB_lines(const string filename,
     ifstream fin;
     fin.open(filename.c_str());
 
-    if (infmt_opt==INFORMAT_PDB||infmt_opt==INFORMAT_PDBAUTO) // PDB format
+    if (infmt_opt==0||infmt_opt==-1) // PDB format
     {
         while (fin.good())
         {
@@ -520,7 +482,7 @@ size_t get_PDB_lines(const string filename,
             }
         }
     }
-    else if (infmt_opt==INFORMAT_SPICKER) // SPICKER format
+    else if (infmt_opt==1) // SPICKER format
     {
         int L=0;
         float x,y,z;
@@ -549,7 +511,7 @@ size_t get_PDB_lines(const string filename,
             getline(fin, line);
         }
     }
-    else if (infmt_opt==INFORMAT_XYZ) // xyz format
+    else if (infmt_opt==2) // xyz format
     {
         int L=0;
         char A;
@@ -579,7 +541,7 @@ size_t get_PDB_lines(const string filename,
             }
         }
     }
-    else if (infmt_opt==INFORMAT_MMCIF) // PDBx/mmCIF format
+    else if (infmt_opt==3) // PDBx/mmCIF format
     {
         bool loop_ = false; // not reading following content
         map<string,int> _atom_site;
@@ -614,11 +576,7 @@ size_t get_PDB_lines(const string filename,
                 loop_=true;
                 _atom_site.clear();
                 atom_site_pos=0;
-                int rrshif = 11;
-                if (*line.rbegin() == '\r'){
-                    rrshif = 12;
-                }
-                _atom_site[line.substr(11,line.size()-rrshif)]=atom_site_pos;
+                _atom_site[line.substr(11,line.size()-12)]=atom_site_pos;
 
                 while(1)
                 {
@@ -626,7 +584,7 @@ size_t get_PDB_lines(const string filename,
                     else PrintErrorAndQuit("ERROR! Unexpected end of "+filename);
                     if (line.size()==0) continue;
                     if (line.compare(0,11,"_atom_site.")) break;
-                    _atom_site[line.substr(11,line.size()-rrshif)]=++atom_site_pos;
+                    _atom_site[line.substr(11,line.size()-12)]=++atom_site_pos;
                 }
 
 
@@ -900,156 +858,6 @@ int read_PDB(const vector<string> &PDB_lines, double **a, char *seq,
     return i;
 }
 
-int saveBinaryFile( const string &outfile, const int extra_data_size, const char *exdata
-    , const int mol_type , const string &chain_name
-    , const int num_residues, double **a, const char *seq
-    ,const vector<string> &resi_vec, const int byresi_opt){
-    ofstream fileOut(outfile.c_str(), std::ios::binary| ios::out);
-    
-    static_assert(4 == sizeof(int));
-    static_assert(8 == sizeof(double));
-
-    if (fileOut.is_open() && fileOut.good())
-    {
-        char head[6] = {'B','X','Y','Z','V','1'};
-        fileOut.write(&head[0], 6);
-        
-        char exdd[4];
-        memcpy(&exdd[0],&extra_data_size,sizeof(int));
-        fileOut.write(&exdd[0], 4);
-        if(extra_data_size > 0){
-            fileOut.write(&exdata[0], extra_data_size);
-        }
-
-        char typ[4];
-        memcpy(&typ[0],&mol_type,sizeof(int));
-        fileOut.write(&typ[0], 4);
-
-        char cname[20] = {'\0','\0','\0','\0','\0','\0','\0','\0','\0','\0',
-                        '\0','\0','\0','\0','\0','\0','\0','\0','\0','\0'};
-        if(chain_name.size() <= 20){
-            memcpy(cname, chain_name.c_str(),chain_name.size());
-        }else{
-            printf("The length of the chain name must be less than 21.\nThe name was truncated.\n");
-            memcpy(cname, chain_name.c_str(),20);
-        }
-        fileOut.write(&cname[0],20);
-
-        char siz[4];
-        memcpy(&siz[0],&num_residues,sizeof(int));
-        fileOut.write(&siz[0], 4);
-
-        fileOut.write(&seq[0], num_residues);
-
-        char rs[6*num_residues];
-        for(int ii = 0;ii < num_residues*6;ii++){
-            rs[ii] = 0;
-        }
-
-        if(byresi_opt >= 1){    
-            for(int rr = 0;rr < resi_vec.size();rr++){
-                char c[resi_vec[rr].size() + 1];
-                strcpy(c, resi_vec[rr].c_str());
-                if(byresi_opt >= 2){
-                    memcpy(&rs[6*rr],&c[0],6);
-                }else if(byresi_opt == 1){
-                    memcpy(&rs[6*rr],&c[0],5);
-                }else{
-                    //do nothing
-                }
-            }
-        }
-        fileOut.write(&rs[0], num_residues*6);
-
-        char buff[sizeof(double)*3*num_residues];
-        memcpy(&buff[0],&a[0][0],sizeof(double)*3*num_residues);
-        //printf("%f %f\n",*((double *) &buff[24+8]),a[1][1]);//debug
-        fileOut.write(&buff[0],sizeof(double)*3*num_residues);
-        
-        fileOut.close();
-        
-        return 1;
-    }else{
-
-        printf("Can not open file %s for writing.\n",outfile.c_str());
-        return -1;
-    }
-}
-
-int loadBinaryFile( const string &fname_lign,char **exdata_,int *mol_type_, char **chain_name_, double ***a_, char **seq_,
-    vector<string> &resi_vec, const int byresi_opt){
-        
-    static_assert(4 == sizeof(int));
-    static_assert(8 == sizeof(double));
-
-    if (fname_lign == "")
-        PrintErrorAndQuit("Please provide a file name for option -i!");
-    // open alignment file
-    int n_p = 0;// number of structures in alignment file
-    string line;
-    
-    ifstream fileIn(fname_lign.c_str(), std::ios::binary);
-    if (fileIn.is_open() && fileIn.good())
-    {
-        char head[6];
-        fileIn.read(head, 6);        
-        char headchk[6] = {'B','X','Y','Z','V','1'};
-        if(!equal(&head[0],&head[0]+6,&headchk[0])){
-            PrintErrorAndQuit("ERROR! Wrong header!");
-        }
-        char buff[4];
-        fileIn.read(buff, 4);        
-        int extra_data_size = *((int *) buff);
-
-        if(extra_data_size > 0){
-            char *exdata = new char[extra_data_size];
-            fileIn.read(exdata, extra_data_size);
-            *exdata_ = exdata;
-        }
-        
-        fileIn.read(buff, 4);
-        int mol_type = *((int *) buff);
-        
-        char* chain_name = new char[21];
-        fileIn.read(chain_name, 20);
-        chain_name[20] = '\0';
-
-        fileIn.read(buff, 4);
-        int num_records = *((int *) buff);
-        
-        double **a = create2DArray<double>(num_records,3);
-        char *seq = new char[num_records+1];
-
-        int record_size = 1+1*6+8*3;
-        //char, char*6, double*3
-
-        char contents[num_records*record_size];
-        fileIn.read(contents, num_records*record_size);
-        
-        char resi[num_records*6];
-        memcpy(&seq[0],&contents[0],num_records);
-        memcpy(&resi[0],&contents[0]+num_records,num_records*6);
-        memcpy(a[0],&contents[0]+num_records*7,num_records*8*3);
-        
-        for(int i = 0;i < num_records;i++){
-            if (byresi_opt>=2){
-                std::string strr(&resi[i*6], &resi[i*6] + 6);
-                resi_vec.push_back(strr);
-            }
-            if (byresi_opt ==1){
-                std::string strr(&resi[i*6], &resi[i*6] + 5);
-                resi_vec.push_back(strr);
-            }
-        }
-        seq[num_records]='\0';
-        *a_ = a;
-        *seq_ = seq;
-        *mol_type_ = mol_type;
-        *chain_name_ = chain_name;
-        return num_records;
-    }
-    return -1;
-}
 double dist(double x[3], double y[3])
 {
     double d1=x[0]-y[0];
@@ -1509,7 +1317,7 @@ bool Kabsch(double **x, double **y, int n, int mode, double *rms,
 /* Input: score[1:len1, 1:len2], and gap_open
  * Output: j2i[1:len2] \in {1:len1} U {-1}
  * path[0:len1, 0:len2]=1,2,3, from diagonal, horizontal, vertical */
-void NWDP_TM_A(double **score, bool **path, double **val,
+void NWDP_TM(double **score, bool **path, double **val,
     int len1, int len2, double gap_open, int j2i[])
 {
 
@@ -1591,7 +1399,7 @@ void NWDP_TM_A(double **score, bool **path, double **val,
 /* Input: vectors x, y, rotation matrix t, u, scale factor d02, and gap_open
  * Output: j2i[1:len2] \in {1:len1} U {-1}
  * path[0:len1, 0:len2]=1,2,3, from diagonal, horizontal, vertical */
-inline void NWDP_TM_B(bool **path, double **val, double **x, double **y,
+void NWDP_TM(bool **path, double **val, double **x, double **y,
     int len1, int len2, double t[3], double u[3][3],
     double d02, double gap_open, int j2i[])
 {
@@ -1614,19 +1422,25 @@ inline void NWDP_TM_B(bool **path, double **val, double **x, double **y,
         path[0][j]=false; //not from diagonal
         j2i[j]=-1;    //all are not aligned, only use j2i[1:len2]
     }      
-    double xx[3];
-    for(i=1; i<=len1; i++){
+    double xx[3], dij;
+
+
+    //decide matrix and path
+    for(i=1; i<=len1; i++)
+    {
         transform(t, u, &x[i-1][0], xx);
         for(j=1; j<=len2; j++)
         {
+            dij=dist(xx, &y[j-1][0]);    
+            d=val[i-1][j-1] +  1.0/(1+dij/d02);
 
-            d=val[i-1][j-1] +  1.0/(1+dist(xx, &y[j-1][0])/d02);
-            
             //symbol insertion in horizontal (= a gap in vertical)
-            h=val[i-1][j]+((path[i-1][j])?(gap_open):(0.0)); //aligned in last position
+            h=val[i-1][j];
+            if(path[i-1][j]) h += gap_open; //aligned in last position
 
             //symbol insertion in vertical
-            v=val[i][j-1]+((path[i][j-1])?(gap_open):(0.0)); //aligned in last position
+            v=val[i][j-1];
+            if(path[i][j-1]) v += gap_open; //aligned in last position
 
 
             if(d>=h && d>=v)
@@ -1643,7 +1457,6 @@ inline void NWDP_TM_B(bool **path, double **val, double **x, double **y,
         } //for i
     } //for j
 
-
     //trace back to extract the alignment
     i=len1;
     j=len2;
@@ -1654,15 +1467,17 @@ inline void NWDP_TM_B(bool **path, double **val, double **x, double **y,
             j2i[j-1]=i-1;
             i--;
             j--;
-        }else{
-            if(val[i][j-1]+((path[i][j-1])?(gap_open):(0.0)) >=
-             val[i-1][j]+((path[i-1][j])?(gap_open):(0.0))){
-                //vertical
-                j--;
-            }else{
-                //horizontal
-                i--;
-            };
+        }
+        else 
+        {
+            h=val[i-1][j];
+            if(path[i-1][j]) h +=gap_open;
+
+            v=val[i][j-1];
+            if(path[i][j-1]) v +=gap_open;
+
+            if(v>=h) j--;
+            else i--;
         }
     }
 }
@@ -1751,7 +1566,7 @@ void NWDP_SE(bool **path, double **val, double **x, double **y,
  * Input: secondary structure secx, secy, and gap_open
  * Output: j2i[1:len2] \in {1:len1} U {-1}
  * path[0:len1, 0:len2]=1,2,3, from diagonal, horizontal, vertical */
-void NWDP_TM_C(bool **path, double **val, const char *secx, const char *secy,
+void NWDP_TM(bool **path, double **val, const char *secx, const char *secy,
     const int len1, const int len2, const double gap_open, int j2i[])
 {
 
@@ -1996,7 +1811,7 @@ double TMscore8_search(double **r1, double **r2, double **xtm, double **ytm,
     int i, m;
     double score_max, score, rmsd;    
     const int kmax=Lali;    
-    int k_ali[kmax], ka, k_ali2[kmax], ka2, k;
+    int k_ali[kmax], ka, k;
     double t[3];
     double u[3][3];
     double d;
@@ -2031,8 +1846,7 @@ double TMscore8_search(double **r1, double **r2, double **xtm, double **ytm,
     int i_ali[kmax], n_cut;
     int L_frag; //fragment length
     int iL_max; //maximum starting postion for the fragment
-	
-	ka = -1;
+    
     for(i_init=0; i_init<n_init; i_init++)
     {
         L_frag=L_ini[i_init];
@@ -2041,19 +1855,23 @@ double TMscore8_search(double **r1, double **r2, double **xtm, double **ytm,
         i=0;   
         while(1)
         {
-        	
             //extract the fragment starting from position i 
             ka=0;
             for(k=0; k<L_frag; k++)
             {
                 int kk=k+i;
+                r1[k][0]=xtm[kk][0];  
+                r1[k][1]=xtm[kk][1]; 
+                r1[k][2]=xtm[kk][2];   
+                
+                r2[k][0]=ytm[kk][0];  
+                r2[k][1]=ytm[kk][1]; 
+                r2[k][2]=ytm[kk][2];
+                
                 k_ali[ka]=kk;
                 ka++;
             }
-        
-            memcpy(r1[0],xtm[i],sizeof(double)*3*L_frag);
-            memcpy(r2[0],ytm[i],sizeof(double)*3*L_frag);
-        	
+            
             //extract rotation matrix based on the fragment
             Kabsch(r1, r2, L_frag, 1, &rmsd, t, u);
             if (simplify_step != 1)
@@ -2080,11 +1898,8 @@ double TMscore8_search(double **r1, double **r2, double **xtm, double **ytm,
             
             //try to extend the alignment iteratively            
             d = local_d0_search + 1;
-            ka2 = -1;
             for(int it=0; it<n_it; it++)            
             {
-            	
-            	
                 ka=0;
                 for(k=0; k<n_cut; k++)
                 {
@@ -2121,18 +1936,13 @@ double TMscore8_search(double **r1, double **r2, double **xtm, double **ytm,
                 
                 //check if it converges            
                 if(n_cut==ka)
-                {       
-                    if(equal(i_ali,i_ali+n_cut,k_ali)) break;
-                }
-            	
-            	if(n_cut==ka2)
                 {                
-                    if(equal(i_ali,i_ali+n_cut,k_ali2)) break;
-                }
-            	
-	        	std::copy(k_ali, k_ali+ka,k_ali2);
-            	ka2 = ka;
-            	
+                    for(k=0; k<n_cut; k++)
+                    {
+                        if(i_ali[k]!=k_ali[k]) break;
+                    }
+                    if(k==n_cut) break;
+                }                                                               
             } //for iteration            
 
             if(i<iL_max)
@@ -2156,7 +1966,7 @@ double TMscore8_search_standard( double **r1, double **r2,
     int i, m;
     double score_max, score, rmsd;
     const int kmax = Lali;
-    int k_ali[kmax], ka, k_ali2[kmax], ka2, k;
+    int k_ali[kmax], ka, k;
     double t[3];
     double u[3][3];
     double d;
@@ -2191,7 +2001,6 @@ double TMscore8_search_standard( double **r1, double **r2,
     int L_frag; //fragment length
     int iL_max; //maximum starting postion for the fragment
 
-	ka = -1;
     for (i_init = 0; i_init<n_init; i_init++)
     {
         L_frag = L_ini[i_init];
@@ -2202,16 +2011,20 @@ double TMscore8_search_standard( double **r1, double **r2,
         {
             //extract the fragment starting from position i 
             ka = 0;
-            for(k=0; k<L_frag; k++)
+            for (k = 0; k<L_frag; k++)
             {
-                int kk=k+i;
-                k_ali[ka]=kk;
+                int kk = k + i;
+                r1[k][0] = xtm[kk][0];
+                r1[k][1] = xtm[kk][1];
+                r1[k][2] = xtm[kk][2];
+
+                r2[k][0] = ytm[kk][0];
+                r2[k][1] = ytm[kk][1];
+                r2[k][2] = ytm[kk][2];
+
+                k_ali[ka] = kk;
                 ka++;
             }
-        
-            memcpy(r1[0],xtm[i],sizeof(double)*3*L_frag);
-            memcpy(r2[0],ytm[i],sizeof(double)*3*L_frag);
-
             //extract rotation matrix based on the fragment
             Kabsch(r1, r2, L_frag, 1, &rmsd, t, u);
             if (simplify_step != 1)
@@ -2239,7 +2052,6 @@ double TMscore8_search_standard( double **r1, double **r2,
 
             //try to extend the alignment iteratively            
             d = local_d0_search + 1;
-            ka2 = -1;
             for (int it = 0; it<n_it; it++)
             {
                 ka = 0;
@@ -2277,18 +2089,14 @@ double TMscore8_search_standard( double **r1, double **r2,
                 }
 
                 //check if it converges            
-                if(n_cut==ka)
-                {       
-                    if(equal(i_ali,i_ali+n_cut,k_ali)) break;
+                if (n_cut == ka)
+                {
+                    for (k = 0; k<n_cut; k++)
+                    {
+                        if (i_ali[k] != k_ali[k]) break;
+                    }
+                    if (k == n_cut) break;
                 }
-            	//なぜかこれやると極々微妙に遅くなるが、一貫性のため入れておく
-            	if(n_cut==ka2)
-                {                
-                    if(equal(i_ali,i_ali+n_cut,k_ali2)) break;
-                }
-            	
-	        	std::copy(k_ali, k_ali+ka,k_ali2);
-            	ka2 = ka;
             } //for iteration            
 
             if (i<iL_max)
@@ -2691,7 +2499,7 @@ void get_initial_ss(bool **path, double **val,
     const char *secx, const char *secy, int xlen, int ylen, int *y2x)
 {
     double gap_open=-1.0;
-    NWDP_TM_C(path, val, secx, secy, xlen, ylen, gap_open, y2x);
+    NWDP_TM(path, val, secx, secy, xlen, ylen, gap_open, y2x);
 }
 
 
@@ -2768,7 +2576,6 @@ bool get_initial5( double **r1, double **r2, double **xtm, double **ytm,
         {
             for (int j = 0; j<m2; j = j + n_jump2)
             {
-                /*
                 for (int k = 0; k<n_frag[i_frag]; k++) //fragment in y
                 {
                     r1[k][0] = x[k + i][0];
@@ -2779,16 +2586,12 @@ bool get_initial5( double **r1, double **r2, double **xtm, double **ytm,
                     r2[k][1] = y[k + j][1];
                     r2[k][2] = y[k + j][2];
                 }
-                */
-                memcpy(r1[0],x[i],sizeof(double)*3*n_frag[i_frag]);
-                memcpy(r2[0],y[j],sizeof(double)*3*n_frag[i_frag]);
-
 
                 // superpose the two structures and rotate it
                 Kabsch(r1, r2, n_frag[i_frag], 1, &rmsd, t, u);
 
                 double gap_open = 0.0;
-                NWDP_TM_B(path, val, x, y, xlen, ylen,
+                NWDP_TM(path, val, x, y, xlen, ylen,
                     t, u, d02, gap_open, invmap);
                 GL = get_score_fast(r1, r2, xtm, ytm, x, y, xlen, ylen,
                     invmap, d0, d0_search, t, u);
@@ -2867,7 +2670,7 @@ void get_initial_ssplus(double **r1, double **r2, double **score, bool **path,
         y2x0, D0_MIN,d0);
     
     double gap_open=-1.0;
-    NWDP_TM_A(score, path, val, xlen, ylen, gap_open, y2x);
+    NWDP_TM(score, path, val, xlen, ylen, gap_open, y2x);
 }
 
 
@@ -2883,7 +2686,7 @@ void find_max_frag(double **x, int len, int *start_max,
     if(r_min > fra_min) r_min=fra_min;
     
     int inc=0;
-    double dcu0_cut=dcu0*dcu0;
+    double dcu0_cut=dcu0*dcu0;;
     double dcu_cut=dcu0_cut;
 
     while(Lfr_max < r_min)
@@ -3193,7 +2996,7 @@ double DP_iter(double **r1, double **r2, double **xtm, double **ytm,
     {
         for(iteration=0; iteration<iteration_max; iteration++)
         {           
-            NWDP_TM_B(path, val, x, y, xlen, ylen,
+            NWDP_TM(path, val, x, y, xlen, ylen,
                 t, u, d02, gap_open[g], invmap);
             
             k=0;
@@ -4101,14 +3904,14 @@ void clean_up_after_approx_TM(int *invmap0, int *invmap,
 {
     delete [] invmap0;
     delete [] invmap;
-    delete2DArray(score);
-    delete2DArray(path);
-    delete2DArray(val);
-    delete2DArray(xtm);
-    delete2DArray(ytm);
-    delete2DArray(xt);
-    delete2DArray(r1);
-    delete2DArray(r2);
+    DeleteArray(&score, xlen+1);
+    DeleteArray(&path, xlen+1);
+    DeleteArray(&val, xlen+1);
+    DeleteArray(&xtm, minlen);
+    DeleteArray(&ytm, minlen);
+    DeleteArray(&xt, xlen);
+    DeleteArray(&r1, minlen);
+    DeleteArray(&r2, minlen);
     return;
 }
 
@@ -4135,21 +3938,25 @@ int TMalign_main(double **xa, double **ya,
     double Lnorm;         //normalization length
     double score_d8,d0,d0_search,dcu0;//for TMscore search
     double t[3], u[3][3]; //Kabsch translation vector and rotation matrix
-    
+    double **score;       // Input score table for dynamic programming
+    bool   **path;        // for dynamic programming  
+    double **val;         // for dynamic programming  
+    double **xtm, **ytm;  // for TMscore search engine
+    double **xt;          //for saving the superposed version of r_1 or xtm
+    double **r1, **r2;    // for Kabsch rotation
+
     /***********************/
     /* allocate memory     */
     /***********************/
-    
     int minlen = min(xlen, ylen);
-    
-    double **score = create2DArray<double>(xlen+1, ylen+1);
-    bool **path = create2DArray<bool>(xlen+1, ylen+1);
-    double **val = create2DArray<double>(xlen+1, ylen+1);
-    double **xtm = create2DArray<double>(minlen, 3);
-    double **ytm = create2DArray<double>(minlen, 3);
-    double **xt = create2DArray<double>(xlen, 3);
-    double **r1 = create2DArray<double>(minlen, 3);
-    double **r2 = create2DArray<double>(minlen, 3);
+    NewArray(&score, xlen+1, ylen+1);
+    NewArray(&path, xlen+1, ylen+1);
+    NewArray(&val, xlen+1, ylen+1);
+    NewArray(&xtm, minlen, 3);
+    NewArray(&ytm, minlen, 3);
+    NewArray(&xt, xlen, 3);
+    NewArray(&r1, minlen, 3);
+    NewArray(&r2, minlen, 3);
 
     /***********************/
     /*    parameter set    */
@@ -4589,7 +4396,6 @@ int TMalign_main(double **xa, double **ya,
     d0A=d0;
     d0_0=d0A;
     local_d0_search = d0_search;
-    //This is called TM2 when it is displayed.
     TM1 = TMscore8_search(r1, r2, xtm, ytm, xt, n_ali8, t0, u0, simplify_step,
         score_sum_method, &rmsd, local_d0_search, Lnorm, score_d8, d0);
     TM_0 = TM1;
@@ -4735,6 +4541,7 @@ int CPalign_main(double **xa, double **ya,
 {
     char   *seqx_cp, *seqy_cp; // for the protein sequence 
     char   *secx_cp, *secy_cp; // for the secondary structure 
+    double **xa_cp, **ya_cp;   // coordinates
     string seqxA_cp,seqyA_cp;  // alignment
     int    i,r;
     int    cp_point=0;    // position of circular permutation
@@ -4742,7 +4549,7 @@ int CPalign_main(double **xa, double **ya,
     int    cp_aln_current;// amount of aligned residue in sliding window
 
     /* duplicate structure */
-    double **xa_cp = create2DArray<double>(xlen*2, 3);
+    NewArray(&xa_cp, xlen*2, 3);
     seqx_cp = new char[xlen*2 + 1];
     secx_cp = new char[xlen*2 + 1];
     for (r=0;r<xlen;r++)
@@ -4869,7 +4676,7 @@ int CPalign_main(double **xa, double **ya,
     /* clean up */
     delete[]seqx_cp;
     delete[]secx_cp;
-    delete2DArray(xa_cp);
+    DeleteArray(&xa_cp,xlen*2);
     seqxA_cp.clear();
     seqyA_cp.clear();
     return cp_point;
@@ -4888,7 +4695,6 @@ int main(int argc, char *argv[])
     /**********************/
     string xname       = "";
     string yname       = "";
-    string binout       = "";
     string fname_super = ""; // file name for superposed structure
     string fname_lign  = ""; // file name for user alignment
     string fname_matrix= ""; // file name for output matrix
@@ -4905,8 +4711,8 @@ int main(int argc, char *argv[])
     bool d_opt = false; // flag for -d, user specified d0
 
     double TMcut     =-1;
-    int    infmt1_opt_orig=-1;    // PDB or PDBx/mmCIF format for chain_1
-    int    infmt2_opt_orig=-1;    // PDB or PDBx/mmCIF format for chain_2
+    int    infmt1_opt=-1;    // PDB or PDBx/mmCIF format for chain_1
+    int    infmt2_opt=-1;    // PDB or PDBx/mmCIF format for chain_2
     int    ter_opt   =3;     // TER, END, or different chainID
     int    split_opt =0;     // do not split chain
     int    outfmt_opt=0;     // set -outfmt to full output
@@ -4981,11 +4787,11 @@ int main(int argc, char *argv[])
         }
         else if ( !strcmp(argv[i],"-infmt1") && i < (argc-1) )
         {
-            infmt1_opt_orig=atoi(argv[i + 1]); i++;
+            infmt1_opt=atoi(argv[i + 1]); i++;
         }
         else if ( !strcmp(argv[i],"-infmt2") && i < (argc-1) )
         {
-            infmt2_opt_orig=atoi(argv[i + 1]); i++;
+            infmt2_opt=atoi(argv[i + 1]); i++;
         }
         else if ( !strcmp(argv[i],"-ter") && i < (argc-1) )
         {
@@ -5043,21 +4849,13 @@ int main(int argc, char *argv[])
         {
             het_opt=atoi(argv[i + 1]); i++;
         }
-        else if ( !strcmp(argv[i],"-bin_convert") && i < (argc-1) )
-        {
-            binout=argv[i+1]; i++;
-        }
-        else if ( !strcmp(argv[i],"-bin_file") && i < (argc-1) )
-        {
-            binout=argv[i+1]; i++;
-        }
         else if (xname.size() == 0) xname=argv[i];
         else if (yname.size() == 0) yname=argv[i];
         else PrintErrorAndQuit(string("ERROR! Undefined option ")+argv[i]);
     }
 
-    if(xname.size()==0 || binout.size() == 0 && ((yname.size()==0 && dir_opt.size()==0) || 
-                          (yname.size()    && dir_opt.size())))
+    if(xname.size()==0 || (yname.size()==0 && dir_opt.size()==0) || 
+                          (yname.size()    && dir_opt.size()))
     {
         if (h_opt) print_help(h_opt);
         if (v_opt)
@@ -5153,117 +4951,20 @@ int main(int argc, char *argv[])
     int    xchainnum,ychainnum;// number of chains in a PDB file
     char   *seqx, *seqy;       // for the protein sequence 
     char   *secx, *secy;       // for the secondary structure 
-    //double **xa, **ya;         // for input vectors xa[0...xlen-1][0..2] and
+    double **xa, **ya;         // for input vectors xa[0...xlen-1][0..2] and
                                // ya[0...ylen-1][0..2], in general,
                                // ya is regarded as native structure 
                                // --> superpose xa onto ya
     vector<string> resi_vec1;  // residue index for chain1
     vector<string> resi_vec2;  // residue index for chain2
 
-/*
-ToDo
-・他のオプションがあったらエラー出す
-・複数 Chain について考える
-*/
-    int infmt1_opt = infmt1_opt_orig;
-    int infmt2_opt = infmt2_opt_orig;
-    if(binout.size() > 0){
-
-        if(binout.size() > 5){
-            if(binout.substr(binout.size()-5).compare(".bxyz") == 0){
-                binout = binout.substr(0,binout.size()-5);
-            }
-        }
-        //convert to binary format.
-        for (i=0;i<chain1_list.size();i++){
-            /* parse chain 1 */
-            xname=chain1_list[i];
-            infmt1_opt = infmt1_opt_orig;
-            if(infmt1_opt == INFORMAT_PDBAUTO){
-                int xsiz = xname.size();
-                if(xsiz >= 4){
-                    const char *xc = xname.c_str();
-                    if(xc[xsiz-4] == 'b' && xc[xsiz-3] == 'x' && xc[xsiz-2] == 'y' && xc[xsiz-1] == 'z'){
-                        infmt1_opt = INFORMAT_BINARY;
-                    }
-                }
-            }
-
-            if(infmt1_opt != INFORMAT_BINARY){
-                xchainnum=get_PDB_lines(xname, PDB_lines1, chainID_list1,
-                    mol_vec1, ter_opt, infmt1_opt, atom_opt, split_opt, het_opt);
-            }else{
-                xchainnum = 1;
-            }
-            if (!xchainnum)
-            {
-                cerr<<"Warning! Cannot parse file: "<<xname
-                    <<". Chain number 0."<<endl;
-                continue;
-            }
-            for (chain_i=0;chain_i<xchainnum;chain_i++)
-            {
-                xlen=PDB_lines1[chain_i].size();
-                if (!xlen)
-                {
-                    cerr<<"Warning! Cannot parse file: "<<xname
-                        <<". Chain length 0."<<endl;
-                    continue;
-                }
-                else if (xlen<3)
-                {
-                    cerr<<"Sequence is too short <3!: "<<xname<<endl;
-                    continue;
-                }
-                double **xa = create2DArray<double>(xlen, 3);
-                seqx = new char[xlen + 1];
-                xlen = read_PDB(PDB_lines1[chain_i], xa, seqx, 
-                    resi_vec1, byresi_opt?byresi_opt:o_opt);
-                char *exdata = new char[5];
-                exdata[0] ='D';
-                exdata[1] ='U';
-                exdata[2] ='M';
-                exdata[3] ='M';
-                exdata[4] ='Y';
-                std::string outname = binout;
-
-                if(xchainnum > 1){
-                    outname += "."+ std::to_string(chain_i)+".bxyz";
-                }
-                saveBinaryFile(
-                outname, 5, exdata
-                , mol_vec1[i], chainID_list1[i]
-                , xlen, xa, seqx, resi_vec1
-                , byresi_opt?byresi_opt:o_opt);
-                
-                if(infmt1_opt != INFORMAT_BINARY){
-                    PDB_lines1[chain_i].clear();
-                }
-                delete2DArray(xa);
-                delete [] seqx;
-                delete [] secx;
-                resi_vec1.clear();
-            }
-            xname.clear();
-            if(infmt1_opt != INFORMAT_BINARY){
-                PDB_lines1.clear();
-            }
-            chainID_list1.clear();
-            mol_vec1.clear();
-        }
-        exit(0);
-    }
     /* loop over file names */
     for (i=0;i<chain1_list.size();i++)
     {
         /* parse chain 1 */
         xname=chain1_list[i];
-        if(infmt1_opt != INFORMAT_BINARY){
-            xchainnum=get_PDB_lines(xname, PDB_lines1, chainID_list1,
-                mol_vec1, ter_opt, infmt1_opt, atom_opt, split_opt, het_opt);
-        }else{
-            xchainnum = 1;
-        }
+        xchainnum=get_PDB_lines(xname, PDB_lines1, chainID_list1,
+            mol_vec1, ter_opt, infmt1_opt, atom_opt, split_opt, het_opt);
         if (!xchainnum)
         {
             cerr<<"Warning! Cannot parse file: "<<xname
@@ -5272,21 +4973,7 @@ ToDo
         }
         for (chain_i=0;chain_i<xchainnum;chain_i++)
         {
-            double **xa;
-            if(infmt1_opt == INFORMAT_BINARY){
-                char *exdata;
-                int moltype;
-                char *chainname;
-                xlen = loadBinaryFile(chain1_list[i], &exdata, &moltype, &chainname, &xa, &seqx,
-                    resi_vec1, byresi_opt?byresi_opt:o_opt   
-                );
-                chainID_list1.push_back(std::string(chainname));
-                mol_vec1.push_back(moltype);
-                delete[] exdata;
-                delete[] chainname;
-            }else{
-                xlen=PDB_lines1[chain_i].size();
-            }
+            xlen=PDB_lines1[chain_i].size();
             mol_vec1[chain_i]=-1;
             if (!xlen)
             {
@@ -5299,14 +4986,11 @@ ToDo
                 cerr<<"Sequence is too short <3!: "<<xname<<endl;
                 continue;
             }
+            NewArray(&xa, xlen, 3);
+            seqx = new char[xlen + 1];
             secx = new char[xlen + 1];
-            if(infmt1_opt != INFORMAT_BINARY){
-                xa = create2DArray<double>(xlen, 3);
-                seqx = new char[xlen + 1];
-                xlen = read_PDB(PDB_lines1[chain_i], xa, seqx, 
-                    resi_vec1, byresi_opt?byresi_opt:o_opt);
-            }
-            
+            xlen = read_PDB(PDB_lines1[chain_i], xa, seqx, 
+                resi_vec1, byresi_opt?byresi_opt:o_opt);
             if (mirror_opt) for (r=0;r<xlen;r++) xa[r][2]=-xa[r][2];
             make_sec(xa, xlen, secx); // secondary structure assignment
 
@@ -5316,25 +5000,9 @@ ToDo
                 if (PDB_lines2.size()==0)
                 {
                     yname=chain2_list[j];
-                    
-                    infmt2_opt = infmt2_opt_orig;
-                    if(infmt2_opt == INFORMAT_PDBAUTO){
-                        int xsiz = yname.size();
-                        if(xsiz >= 4){
-                            const char *yc = yname.c_str();
-                            if(yc[xsiz-4] == 'b' && yc[xsiz-3] == 'x' && yc[xsiz-2] == 'y' && yc[xsiz-1] == 'z'){
-                                infmt2_opt = INFORMAT_BINARY;
-                            }
-                        }
-                    }
-
-                    if(infmt2_opt != INFORMAT_BINARY){
-                        ychainnum=get_PDB_lines(yname, PDB_lines2, chainID_list2,
-                            mol_vec2, ter_opt, infmt2_opt, atom_opt, split_opt,
-                            het_opt);
-                    }else{
-                        ychainnum = 1;
-                    }
+                    ychainnum=get_PDB_lines(yname, PDB_lines2, chainID_list2,
+                        mol_vec2, ter_opt, infmt2_opt, atom_opt, split_opt,
+                        het_opt);
                     if (!ychainnum)
                     {
                         cerr<<"Warning! Cannot parse file: "<<yname
@@ -5344,22 +5012,7 @@ ToDo
                 }
                 for (chain_j=0;chain_j<ychainnum;chain_j++)
                 {
-                    double **ya;
-                    if(infmt2_opt == INFORMAT_BINARY){
-                        char *exdata;
-                        int moltype;
-                        char *chainname;
-                        ylen = loadBinaryFile(chain2_list[j], &exdata, &moltype, &chainname, &ya, &seqy,
-                            resi_vec2, byresi_opt?byresi_opt:o_opt   
-                        );
-                        chainID_list2.push_back(std::string(chainname));
-                        mol_vec2.push_back(moltype);
-                        delete[] exdata;
-                        delete[] chainname;
-                    }else{                    
-                        ylen=PDB_lines2[chain_j].size();
-                    }
-
+                    ylen=PDB_lines2[chain_j].size();
                     mol_vec2[chain_j]=-1;
                     if (!ylen)
                     {
@@ -5372,14 +5025,11 @@ ToDo
                         cerr<<"Sequence is too short <3!: "<<yname<<endl;
                         continue;
                     }
+                    NewArray(&ya, ylen, 3);
+                    seqy = new char[ylen + 1];
                     secy = new char[ylen + 1];
-                    if(infmt2_opt != INFORMAT_BINARY){
-                        ya = create2DArray<double>(ylen, 3);
-                        seqy = new char[ylen + 1];
-                        ylen = read_PDB(PDB_lines2[chain_j], ya, seqy,
-                            resi_vec2, byresi_opt?byresi_opt:o_opt);
-                            
-                    }
+                    ylen = read_PDB(PDB_lines2[chain_j], ya, seqy,
+                        resi_vec2, byresi_opt?byresi_opt:o_opt);
                     make_sec(ya, ylen, secy);
                     if (byresi_opt) extract_aln_from_resi(sequence,
                         seqx,seqy,resi_vec1,resi_vec2,byresi_opt);
@@ -5442,7 +5092,7 @@ ToDo
                     seqM.clear();
                     seqxA.clear();
                     seqyA.clear();
-                    delete2DArray(ya);
+                    DeleteArray(&ya, ylen);
                     delete [] seqy;
                     delete [] secy;
                     resi_vec2.clear();
@@ -5450,38 +5100,30 @@ ToDo
                 if (chain2_list.size()>1)
                 {
                     yname.clear();
-                    if(infmt2_opt != INFORMAT_BINARY){
-                        for (chain_j=0;chain_j<ychainnum;chain_j++)
-                            PDB_lines2[chain_j].clear();
-                        PDB_lines2.clear();
-                    }
+                    for (chain_j=0;chain_j<ychainnum;chain_j++)
+                        PDB_lines2[chain_j].clear();
+                    PDB_lines2.clear();
                     chainID_list2.clear();
                     mol_vec2.clear();
                 }
             } // j
-            if(infmt1_opt != INFORMAT_BINARY){
-                PDB_lines1[chain_i].clear();
-            }
-            delete2DArray(xa);
+            PDB_lines1[chain_i].clear();
+            DeleteArray(&xa, xlen);
             delete [] seqx;
             delete [] secx;
             resi_vec1.clear();
         } // chain_i
         xname.clear();
-        if(infmt1_opt != INFORMAT_BINARY){
-            PDB_lines1.clear();
-        }
+        PDB_lines1.clear();
         chainID_list1.clear();
         mol_vec1.clear();
     } // i
     if (chain2_list.size()==1)
     {
         yname.clear();
-        if(infmt2_opt != INFORMAT_BINARY){
-            for (chain_j=0;chain_j<ychainnum;chain_j++)
-                PDB_lines2[chain_j].clear();
-            PDB_lines2.clear();
-        }
+        for (chain_j=0;chain_j<ychainnum;chain_j++)
+            PDB_lines2[chain_j].clear();
+        PDB_lines2.clear();
         resi_vec2.clear();
         chainID_list2.clear();
         mol_vec2.clear();
@@ -5495,4 +5137,3 @@ ToDo
     printf("Total CPU time is %5.2f seconds\n", diff);
     return 0;
 }
-
