@@ -23,10 +23,11 @@ bin/TMalign_mass.exe UP000000625_83333_ECOLI/AF-P36677-F1-model_v1.pdb -dir2 UP0
 
 
 ## Perform multi-processing:
+(You have to be in the directory of this repo.)
 ```
 find UP000000625_83333_ECOLI | grep -E "\.pdb$" | xargs -I {} bin/TMalign_mass.exe {} -bin_convert {}.bxyz 
 ls UP000000625_83333_ECOLI | grep -E "\.pdb.bxyz$"  > UP000000625_83333_ECOLI/pdblist_binary.dat
-perl scripts/multi_process.pl
+perl scripts/multi_process.pl --query UP000000625_83333_ECOLI/AF-P36677-F1-model_v1.pdb --dir UP000000625_83333_ECOLI/ --list UP000000625_83333_ECOLI/pdblist_binary.dat --num_threads 6 --tmscore_threshold 0.5 
 ```
 
 
