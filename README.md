@@ -1,6 +1,13 @@
 # TM-align_mass
 TM-align for large dbs.
 
+## Main differences with the original TM-align:
+ - Check one more previous step in TMscore8_search function.
+ - Force one of the NWDP_TM function to be inline.
+ - Added binary file mode.
+
+Anyway, I expect that result is completely the same with the original TM-align.
+
 ## Compile:
 ```
 clone https://github.com/yamule/TM-align_mass.git
@@ -23,16 +30,25 @@ bin/TMalign_mass.exe UP000000625_83333_ECOLI/AF-P36677-F1-model_v1.pdb -dir2 UP0
 
 
 ## Perform multi-processing:
+(You have to be in the directory of this repo.)
 ```
 find UP000000625_83333_ECOLI | grep -E "\.pdb$" | xargs -I {} bin/TMalign_mass.exe {} -bin_convert {}.bxyz 
 ls UP000000625_83333_ECOLI | grep -E "\.pdb.bxyz$"  > UP000000625_83333_ECOLI/pdblist_binary.dat
-perl scripts/multi_process.pl
+perl scripts/multi_process.pl --query UP000000625_83333_ECOLI/AF-P36677-F1-model_v1.pdb --dir UP000000625_83333_ECOLI/ --list UP000000625_83333_ECOLI/pdblist_binary.dat --num_threads 6 --tmscore_threshold 0.5 
 ```
 
 
 ## References to cite:
+ - TM-align
 Y Zhang, J Skolnick. Nucl Acids Res 33, 2302-9 (2005)
+https://academic.oup.com/nar/article/33/7/2302/2401364
 
+ - This repo
+https://github.com/yamule/TM-align_mass
 
 ## License:
+ - TM-align
 Please follow the comment in the head of the source code.
+ - Scripts under the scripts/ dir
+Apache License, Version 2.0
+http://www.apache.org/licenses/LICENSE-2.0.html
