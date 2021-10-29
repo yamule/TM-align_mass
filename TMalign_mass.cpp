@@ -4589,6 +4589,7 @@ int TMalign_main(double **xa, double **ya,
     d0A=d0;
     d0_0=d0A;
     local_d0_search = d0_search;
+    //This is called TM2 when it is displayed.
     TM1 = TMscore8_search(r1, r2, xtm, ytm, xt, n_ali8, t0, u0, simplify_step,
         score_sum_method, &rmsd, local_d0_search, Lnorm, score_d8, d0);
     TM_0 = TM1;

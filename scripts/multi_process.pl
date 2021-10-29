@@ -4,24 +4,24 @@ use warnings;
 use File::Temp qw/ tempfile tempdir /;
 use Getopt::Long qw(GetOptions);
 
-
 use File::Basename;
 my $dirname = dirname(__FILE__);
 
 my $tempdirr = tempdir( CLEANUP => 1 );
 my $num_cpu = 8;
+my $tmscore_threshold = 0.4;
 #print $tempdirr;
 
 my $chain1;
 my $dir2;
 my $filelist;
 
-my $helpmessage = "Usage: $0 --query query_pdb_file --dir root_dir_for_subject_files --list subject_file_name_list [--num_threads number_of_threads] \n";
-GetOptions('query=s' => \$chain1,'dir=s' => \$dir2, 'list=s' => \$filelist, 'num_threads:i' => \$num_cpu) or die $helpmessage;
+my $helpmessage = "Usage: $0 --query query_pdb_file --dir root_dir_for_subject_files --list subject_file_name_list [--num_threads number_of_threads]  [--tmscore_threshold threshold_for_tmscore(normalized by length of Chain_1)] \n";
+GetOptions('query=s' => \$chain1,'dir=s' => \$dir2, 'list=s' => \$filelist, 'num_threads:i' => \$num_cpu, '--tmscore_threshold:f' => \$tmscore_threshold) or die $helpmessage;
 
 
 my $tmalign_exe = $dirname."/../bin/TMalign_mass.exe ";
-my $tmalign_options = " ";
+my $tmalign_options = " -outfmt 2 ";
 
 my @tempfiles;
 my @temphandle;
@@ -66,10 +66,35 @@ foreach my $pid(@pids){
 	waitpid ($pid, 0);
 }
 
+my @res;
+my $head = "";
 for(my $cc = 0;$cc < $num_cpu;$cc++){
 	open(IN,$tmres[$cc]);
+	my $head_ = <IN>;
+	if($cc == 0){
+		$head = $head_;
+	}
 	while(my $ss = <IN>){
-		print $ss;
+		if($ss =~ /^Total CPU time/){
+			next;
+		}
+		my @ptt = split(/\t/,$ss);
+		if($#ptt < 2){
+			next;
+		}
+		if($ptt[2] > $tmscore_threshold){
+			my %tmp;
+			$tmp{"tmscore"} = $ptt[2];
+			$tmp{"line"} = $ss;
+			push(@res,\%tmp);
+		}
+		#print $ss;
 	}
 	close(IN);
+}
+
+my @sortedd = sort{${$b}{"tmscore"} <=> ${$a}{"tmscore"}}@res;
+print $head;
+foreach my $ss(@sortedd){
+	print ${$ss}{"line"};
 }
