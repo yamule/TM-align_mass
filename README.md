@@ -1,12 +1,14 @@
 # TM-align_mass
-TM-align for large dbs.
+TM-align https://zhanggroup.org/TM-align/ for large dbs.
 
 ## Main differences with the original TM-align:
- - Check one more previous step in TMscore8_search function.
+ - Check alignment state in one more previous step in TMscore8_search(_standard) function.
  - Force one of the NWDP_TM function to be inline.
  - Added binary file mode.
 
-Anyway, I expect that result is completely the same with the original TM-align.
+Anyway, I expect that result is completely the same with that of the original TM-align.
+
+The avobe modifications reduced processing time just 8% or so, therefore, you can use the original version with this small loss of processing time.
 
 ## Compile:
 ```

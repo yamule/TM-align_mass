@@ -5189,6 +5189,9 @@ ToDo
                 xchainnum=get_PDB_lines(xname, PDB_lines1, chainID_list1,
                     mol_vec1, ter_opt, infmt1_opt, atom_opt, split_opt, het_opt);
             }else{
+                if(o_opt){
+                    PrintErrorAndQuit("ERROR! -o can not be used with binary xyz format.");
+                }
                 xchainnum = 1;
             }
             if (!xchainnum)
@@ -5267,7 +5270,7 @@ ToDo
                 }
             }
         }
-        
+
         if(infmt1_opt != INFORMAT_BINARY){
             xchainnum=get_PDB_lines(xname, PDB_lines1, chainID_list1,
                 mol_vec1, ter_opt, infmt1_opt, atom_opt, split_opt, het_opt);
@@ -5343,6 +5346,9 @@ ToDo
                             mol_vec2, ter_opt, infmt2_opt, atom_opt, split_opt,
                             het_opt);
                     }else{
+                        if(o_opt){
+                            PrintErrorAndQuit("ERROR! -o can not be used with binary xyz format.");
+                        }
                         ychainnum = 1;
                     }
                     if (!ychainnum)
