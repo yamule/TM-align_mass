@@ -36,6 +36,12 @@ perl scripts/multi_process.pl --query UP000000625_83333_ECOLI/AF-P36677-F1-model
 Y Zhang, J Skolnick. Nucl Acids Res 33, 2302-9 (2005)
 https://academic.oup.com/nar/article/33/7/2302/2401364
 
+ - This repo
+https://github.com/yamule/TM-align_mass
 
 ## License:
+ - TM-align
 Please follow the comment in the head of the source code.
+ - Scripts under the scripts/ dir
+Apache License, Version 2.0
+http://www.apache.org/licenses/LICENSE-2.0.html
