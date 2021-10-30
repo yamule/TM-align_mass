@@ -8,7 +8,7 @@ TM-align https://zhanggroup.org/TM-align/ for large dbs.
 
 Anyway, I expect that result is completely the same with that of the original TM-align.
 
-The avobe modifications reduced processing time just 8% or so, therefore, you can use the original version with this small loss of processing time.
+The above modifications reduced processing time just 8% or so, therefore, you can use the original version with this small loss of processing time.
 
 ## Compile:
 ```
