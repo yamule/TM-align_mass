@@ -36,4 +36,4 @@ UP000000625_83333_ECOLI/
 *.stackdump
 /.vscode/
 /debugfiles/
-
+/output/
