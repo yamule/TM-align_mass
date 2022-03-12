@@ -49,6 +49,7 @@ perl scripts/getseq_pdb.pl UP000000625_83333_ECOLI/ > output/allfas.fas
 perl scripts/iter_blastclust.pl -in output/allfas.fas -out output/clustered.dat -outdir output/clusout -ident 30 -cov_long 0.5 -cov_short 0.5
 ここから
 クラスタ内の構造比較
+一時ファイルはTmpDirに作るようにする
 ```
 
 
