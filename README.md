@@ -15,7 +15,7 @@ The above modifications reduced processing time just 8% or so, therefore, you ca
 clone https://github.com/yamule/TM-align_mass.git
 cd TM-align_mass
 mkdir bin
-g++ -static -O3 -ffast-math -lm -o bin/TMalign_mass.exe TMalign_mass.cpp
+g++ -static -O3 -ffast-math -lm -o bin/TMalign_mass.exe TMalign_mass.cpp -lz
 ```
 
 ## An example usage:
