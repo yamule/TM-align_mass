@@ -420,7 +420,7 @@ void split_white(const string &line, vector<string> &line_vec,
         }
     }
 }
-#define MAXLINELEN  5096
+#define MAXLINELEN  8192
 size_t get_PDB_lines(const string filename,
     vector<vector<string> >&PDB_lines, vector<string> &chainID_list,
     vector<int> &mol_vec, const int ter_opt, const int infmt_opt,
