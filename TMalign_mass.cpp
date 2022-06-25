@@ -619,6 +619,8 @@ size_t get_PDB_lines(const string filename,
         while (0!=gzgets(fp,buffer,MAXLINELEN))
         {
             string line = string(buffer);
+            //https://stackoverflow.com/questions/216823/how-to-trim-a-stdstring
+            line.erase(line.find_last_not_of(" \n\r\t")+1);
             if (line.size()==0) continue;
             if (loop_) loop_ = line.compare(0,2,"# ");
             if (!loop_)
@@ -628,6 +630,7 @@ size_t get_PDB_lines(const string filename,
                 {
                     if (0!=gzgets(fp,buffer,MAXLINELEN)){
                         line = string(buffer);
+                        line.erase(line.find_last_not_of(" \n\r\t")+1);
                     }else{
                         PrintErrorAndQuit("ERROR! Unexpected end of "+filename);
                     }
@@ -638,26 +641,20 @@ size_t get_PDB_lines(const string filename,
                 loop_=true;
                 _atom_site.clear();
                 atom_site_pos=0;
-                int rrshif = 11;
-                if (*line.rbegin() == '\r'){
-                    rrshif = 12;
-                }
-                if (*line.rbegin() == '\n'){
-                    rrshif++;
-                }
                 
-                _atom_site[line.substr(11,line.size()-rrshif)]=atom_site_pos;
-
+                _atom_site[line.substr(11,line.size()-11)]=atom_site_pos;
+                
                 while(1)
                 {
                     if (0!=gzgets(fp,buffer,MAXLINELEN)){
                         line = string(buffer);
+                        line.erase(line.find_last_not_of(" \n\r\t")+1);
                     }else{
                         PrintErrorAndQuit("ERROR! Unexpected end of "+filename);
                     }
                     if (line.size()==0) continue;
                     if (line.compare(0,11,"_atom_site.")) break;
-                    _atom_site[line.substr(11,line.size()-rrshif)]=++atom_site_pos;
+                    _atom_site[line.substr(11,line.size()-11)]=++atom_site_pos;
                 }
 
 
