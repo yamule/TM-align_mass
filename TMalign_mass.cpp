@@ -85,6 +85,7 @@
 #include <algorithm>
 #include <string>
 #include <map>
+#include <zlib.h>
 
 using namespace std;
 
@@ -419,7 +420,7 @@ void split_white(const string &line, vector<string> &line_vec,
         }
     }
 }
-
+#define MAXLINELEN  8192
 size_t get_PDB_lines(const string filename,
     vector<vector<string> >&PDB_lines, vector<string> &chainID_list,
     vector<int> &mol_vec, const int ter_opt, const int infmt_opt,
@@ -433,17 +434,22 @@ size_t get_PDB_lines(const string filename,
     size_t model_idx=0;
     vector<string> tmp_str_vec;
     
-    ifstream fin;
-    fin.open(filename.c_str());
-
+    
     if (infmt_opt==INFORMAT_PDB||infmt_opt==INFORMAT_PDBAUTO) // PDB format
     {
-        while (fin.good())
+
+        gzFile fp =gzopen(filename.c_str(),"r");
+        size_t nLines =0;
+        char *buffer = new char[MAXLINELEN];
+        while (0!=gzgets(fp,buffer,MAXLINELEN))
         {
-            getline(fin, line);
+            string line = string(buffer);
             if (infmt_opt==-1 && line.compare(0,5,"loop_")==0) // PDBx/mmCIF
+            {
+                gzclose(fp);
                 return get_PDB_lines(filename,PDB_lines,chainID_list,
                     mol_vec, ter_opt, 3, atom_opt, split_opt,het_opt);
+            }
             if (i > 0)
             {
                 if      (ter_opt>=1 && line.compare(0,3,"END")==0) break;
@@ -519,9 +525,13 @@ size_t get_PDB_lines(const string filename,
                 }
             }
         }
+        gzclose(fp);
     }
     else if (infmt_opt==INFORMAT_SPICKER) // SPICKER format
     {
+        
+        ifstream fin;
+        fin.open(filename.c_str());
         int L=0;
         float x,y,z;
         stringstream i8_stream;
@@ -548,9 +558,13 @@ size_t get_PDB_lines(const string filename,
             }
             getline(fin, line);
         }
+        fin.close();
     }
     else if (infmt_opt==INFORMAT_XYZ) // xyz format
     {
+        
+        ifstream fin;
+        fin.open(filename.c_str());
         int L=0;
         char A;
         stringstream i8_stream;
@@ -578,9 +592,15 @@ size_t get_PDB_lines(const string filename,
                 else mol_vec.back()--;
             }
         }
+        fin.close();
     }
     else if (infmt_opt==INFORMAT_MMCIF) // PDBx/mmCIF format
     {
+        
+        gzFile fp =gzopen(filename.c_str(),"r");
+        size_t nLines =0;
+        char *buffer = new char[MAXLINELEN];
+
         bool loop_ = false; // not reading following content
         map<string,int> _atom_site;
         int atom_site_pos;
@@ -595,9 +615,12 @@ size_t get_PDB_lines(const string filename,
         string prev_resi="";
         string model_index=""; // the same as model_idx but type is string
         stringstream i8_stream;
-        while (fin.good())
+
+        while (0!=gzgets(fp,buffer,MAXLINELEN))
         {
-            getline(fin, line);
+            string line = string(buffer);
+            //https://stackoverflow.com/questions/216823/how-to-trim-a-stdstring
+            line.erase(line.find_last_not_of(" \n\r\t")+1);
             if (line.size()==0) continue;
             if (loop_) loop_ = line.compare(0,2,"# ");
             if (!loop_)
@@ -605,8 +628,12 @@ size_t get_PDB_lines(const string filename,
                 if (line.compare(0,5,"loop_")) continue;
                 while(1)
                 {
-                    if (fin.good()) getline(fin, line);
-                    else PrintErrorAndQuit("ERROR! Unexpected end of "+filename);
+                    if (0!=gzgets(fp,buffer,MAXLINELEN)){
+                        line = string(buffer);
+                        line.erase(line.find_last_not_of(" \n\r\t")+1);
+                    }else{
+                        PrintErrorAndQuit("ERROR! Unexpected end of "+filename);
+                    }
                     if (line.size()) break;
                 }
                 if (line.compare(0,11,"_atom_site.")) continue;
@@ -614,19 +641,20 @@ size_t get_PDB_lines(const string filename,
                 loop_=true;
                 _atom_site.clear();
                 atom_site_pos=0;
-                int rrshif = 11;
-                if (*line.rbegin() == '\r'){
-                    rrshif = 12;
-                }
-                _atom_site[line.substr(11,line.size()-rrshif)]=atom_site_pos;
-
+                
+                _atom_site[line.substr(11,line.size()-11)]=atom_site_pos;
+                
                 while(1)
                 {
-                    if (fin.good()) getline(fin, line);
-                    else PrintErrorAndQuit("ERROR! Unexpected end of "+filename);
+                    if (0!=gzgets(fp,buffer,MAXLINELEN)){
+                        line = string(buffer);
+                        line.erase(line.find_last_not_of(" \n\r\t")+1);
+                    }else{
+                        PrintErrorAndQuit("ERROR! Unexpected end of "+filename);
+                    }
                     if (line.size()==0) continue;
                     if (line.compare(0,11,"_atom_site.")) break;
-                    _atom_site[line.substr(11,line.size()-rrshif)]=++atom_site_pos;
+                    _atom_site[line.substr(11,line.size()-11)]=++atom_site_pos;
                 }
 
 
@@ -751,9 +779,9 @@ size_t get_PDB_lines(const string filename,
         alt_id.clear();
         asym_id.clear();
         AA.clear();
+        gzclose(fp);
     }
 
-    fin.close();
     line.clear();
     if (!split_opt) chainID_list.push_back("");
     return PDB_lines.size();

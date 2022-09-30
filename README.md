@@ -5,6 +5,7 @@ TM-align https://zhanggroup.org/TM-align/ for large dbs.
  - Check alignment state in one more previous step in TMscore8_search(_standard) function.
  - Force one of the NWDP_TM function to be inline.
  - Added binary file mode.
+ - Support gzip-ed file.
 
 Anyway, I expect that result is completely the same with that of the original TM-align.
 
@@ -15,7 +16,7 @@ The above modifications reduced processing time just 8% or so, therefore, you ca
 clone https://github.com/yamule/TM-align_mass.git
 cd TM-align_mass
 mkdir bin
-g++ -static -O3 -ffast-math -lm -o bin/TMalign_mass.exe TMalign_mass.cpp
+g++ -static -O3 -ffast-math -lm -o bin/TMalign_mass.exe TMalign_mass.cpp -lz
 ```
 
 ## An example usage:

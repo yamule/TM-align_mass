@@ -31,9 +31,11 @@
 *.out
 *.app
 
+.*
 mypersonal_memo.txt
 UP000000625_83333_ECOLI/
+nogit/
 *.stackdump
 /.vscode/
 /debugfiles/
-
+/output/
