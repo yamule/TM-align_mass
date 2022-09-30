@@ -40,19 +40,6 @@ ls UP000000625_83333_ECOLI | grep -E "\.pdb.bxyz$"  > UP000000625_83333_ECOLI/pd
 perl scripts/multi_process.pl --query UP000000625_83333_ECOLI/AF-P36677-F1-model_v1.pdb --dir UP000000625_83333_ECOLI/ --list UP000000625_83333_ECOLI/pdblist_binary.dat --num_threads 6 --tmscore_threshold 0.5 
 ```
 
-## Generate clustered db:
-(You have to be in the directory of this repo & finished "Perform multi-processing" except for the last line.)
-
-Set path for blastp and makeblastdb in scripts/iter_blastclust.pl
-```
-mkdir output
-perl scripts/getseq_pdb.pl UP000000625_83333_ECOLI/ > output/allfas.fas
-perl scripts/iter_blastclust.pl -in output/allfas.fas -out output/clustered.dat -outdir output/clusout -ident 30 -cov_long 0.5 -cov_short 0.5
-ここから
-クラスタ内の構造比較
-一時ファイルはTmpDirに作るようにする
-```
-
 
 ## References to cite:
  - TM-align<br>
