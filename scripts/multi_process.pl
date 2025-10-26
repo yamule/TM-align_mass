@@ -15,13 +15,20 @@ my $tmscore_threshold = 0.4;
 my $chain1;
 my $dir2;
 my $filelist;
+my $atom="DEFAULT";
+# Please pass atom name with "" including space like " C1'".
+my $helpmessage = "Usage: $0 --query query_pdb_file --dir root_dir_for_subject_files --list subject_file_name_list [--atom atom_name_to_align] [--num_threads number_of_threads]  [--tmscore_threshold threshold_for_tmscore(normalized by length of Chain_1)] \n";
+GetOptions('query=s' => \$chain1, 'atom=s'=>\$atom, 'dir=s' => \$dir2, 'list=s' => \$filelist, 'num_threads:i' => \$num_cpu, '--tmscore_threshold:f' => \$tmscore_threshold) or die $helpmessage;
 
-my $helpmessage = "Usage: $0 --query query_pdb_file --dir root_dir_for_subject_files --list subject_file_name_list [--num_threads number_of_threads]  [--tmscore_threshold threshold_for_tmscore(normalized by length of Chain_1)] \n";
-GetOptions('query=s' => \$chain1,'dir=s' => \$dir2, 'list=s' => \$filelist, 'num_threads:i' => \$num_cpu, '--tmscore_threshold:f' => \$tmscore_threshold) or die $helpmessage;
-
+if($atom eq "DEFAULT"){
+	$atom = "";
+}else{
+	$atom = '"'.$atom.'"';
+	$atom = "-atom $atom";
+}
 
 my $tmalign_exe = $dirname."/../bin/TMalign_mass.exe ";
-my $tmalign_options = " -outfmt 2 ";
+my $tmalign_options = " -outfmt 2 $atom ";
 
 my @tempfiles;
 my @temphandle;
@@ -61,7 +68,7 @@ for(my $cc = 0;$cc < $num_cpu;$cc++){
 		exit(0);
 	}
 }
-#todo process の開始時間とかで実際そのプロセスなのか判定できるならする
+
 foreach my $pid(@pids){
 	waitpid ($pid, 0);
 }
